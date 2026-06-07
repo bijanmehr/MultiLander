@@ -260,11 +260,28 @@ is shown as a small `CADET`-style readout near the HUD. The TITLE screen lists
 the three options with the active one highlighted. `1`/`2`/`3` do NOT count as
 "any key" for leaving TITLE.
 
-**Touch controls** (pointer events; shown only on coarse-pointer devices):
-three translucent hold-zones — left third = rotate left, right third = rotate
-right, bottom-center = thrust — feeding the same held-input set as the keyboard;
-multi-touch works (rotate+thrust). `touch-action: none` on the canvas; in
-portrait orientation show a "ROTATE YOUR DEVICE" line. Any tap leaves TITLE/ENDED.
+**Touch controls** (pointer events; shown only on coarse-pointer devices) —
+**arcade buttons**, what the 1979 cabinet had:
+- Three fixed on-screen buttons: a `←` `→` rotate pair bottom-left and a wide
+  `THRUST` bottom-right. DOM elements with chamfered corners (CSS `clip-path`,
+  matching the vector aesthetic), 1.5px white outline + glow, ≥ 64px touch
+  targets, offset by `env(safe-area-inset-*)`. Labels are NOT CSS text — each
+  button contains a small canvas drawn once with `VectorFont` (`←`, `→`,
+  `THRUST`). Pressed state: filled `rgba(255,255,255,.25)` + full-bright border.
+- Buttons feed the SAME held-input set as the keyboard via per-button
+  pointerdown/up/cancel; multi-touch works (rotate+thrust simultaneously);
+  both rotates held = net 0. The old invisible hold-zones are REMOVED.
+- **Tappable difficulty (touch parity with 1/2/3)**: the renderer exposes the
+  last-drawn TITLE preset-menu segment hitboxes (canvas coords); on TITLE a tap
+  inside a segment selects that preset and does NOT start an episode. On ENDED,
+  tapping the persistent preset readout cycles trainee→cadet→commander.
+- **Agent-view button (touch parity with O)**: a small chamfered `OBS` toggle,
+  top-right, coarse-pointer only.
+- Tap routing in TITLE/ENDED: taps on the preset menu/readout or `OBS` perform
+  only their action; taps on the arcade buttons or bare canvas count as
+  "any key" (a thumb already resting on THRUST when the episode starts behaves
+  like held Space — accepted).
+- `touch-action: none` on canvas and buttons; portrait → "ROTATE YOUR DEVICE".
 
 **Page chrome** (retro presentation, §9 look): black page; header `LUNAR LANDER`
 **drawn with the vector stroke font on a header canvas** (no CSS-styled text for

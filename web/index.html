@@ -46,8 +46,7 @@
 
     /* --------------------------------------------------- canvas / stage */
     /* Logical canvas is 2000x750 = the world (CONTRACT §9); CSS scales it
-       to fit the viewport width while preserving the 8:3 aspect ratio. The
-       stage wrapper carries the size so the touch overlay can sit on top. */
+       to fit the viewport width while preserving the 8:3 aspect ratio. */
     #stage {
       position: relative;
       width: min(100vw, calc((100vh - 10.5rem) * 8 / 3));
@@ -61,30 +60,100 @@
       touch-action: none; /* §8: no browser pan/zoom while flying */
     }
 
-    /* ------------------------------------------------ touch hold-zones */
-    /* §8: left third = rotate left, right third = rotate right,
-       bottom-center = thrust. Faint vector-style dashed outlines so they
-       are discoverable; visible only on coarse-pointer devices (app.js
-       double-checks with matchMedia before wiring pointer events). */
+    /* --------------------------------------------- touch arcade buttons */
+    /* §8: ←/→ rotate pair bottom-left, wide THRUST bottom-right, small OBS
+       toggle top-right — what the 1979 cabinet had. Chamfered corners (cut
+       10px at 45°) via clip-path polygons: the 1.5px outline is an evenodd
+       polygon RING on ::after (clipping the button itself would cut the
+       border open at every chamfer); ::before carries the pressed fill.
+       Labels are small canvases painted ONCE with VectorFont in app.js —
+       never CSS text (§8/§9). Visible only on coarse-pointer devices
+       (app.js double-checks with matchMedia before wiring pointer events). */
     #touch { display: none; }
     @media (pointer: coarse) {
-      #touch { display: block; position: absolute; inset: 0; }
+      #touch {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none; /* only the buttons themselves take input */
+      }
     }
-    #touch .zone {
+    .abtn {
       position: absolute;
-      touch-action: none;
+      pointer-events: auto;
+      touch-action: none; /* §8: no browser pan/zoom on the controls */
       user-select: none;
       -webkit-user-select: none;
-      border: 1px dashed rgba(255, 255, 255, 0.22);
-      color: rgba(255, 255, 255, 0.28);
+      -webkit-tap-highlight-color: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: clamp(18px, 4.5vmin, 42px);
+      background: transparent;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.28); /* soft glow */
     }
-    #zone-left   { left: 0;   top: 0;    width: 33%; height: 100%; }
-    #zone-right  { right: 0;  top: 0;    width: 33%; height: 100%; }
-    #zone-thrust { left: 34%; right: 34%; bottom: 0; height: 38%;  }
+    .abtn::before,
+    .abtn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+    }
+    /* Fill layer (chamfered octagon) — transparent until pressed. */
+    .abtn::before {
+      background: transparent;
+      clip-path: polygon(
+        10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
+        calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+    }
+    /* 1.5px white-ish outline: evenodd ring between the outer octagon and
+       the same octagon inset by 1.5px (chamfer endpoints at 10.6px so the
+       45° edge keeps the stroke width). The first point of each loop is
+       repeated so the bridge segment is traversed twice and vanishes. */
+    .abtn::after {
+      background: rgba(255, 255, 255, 0.65);
+      clip-path: polygon(evenodd,
+        10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
+        calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px,
+        10px 0,
+        10.6px 1.5px, calc(100% - 10.6px) 1.5px,
+        calc(100% - 1.5px) 10.6px, calc(100% - 1.5px) calc(100% - 10.6px),
+        calc(100% - 10.6px) calc(100% - 1.5px), 10.6px calc(100% - 1.5px),
+        1.5px calc(100% - 10.6px), 1.5px 10.6px,
+        10.6px 1.5px);
+    }
+    /* §8 pressed state: filled + full-bright border + stronger glow. */
+    .abtn.pressed { box-shadow: 0 0 16px rgba(255, 255, 255, 0.6); }
+    .abtn.pressed::before { background: rgba(255, 255, 255, 0.25); }
+    .abtn.pressed::after { background: #fff; }
+    .abtn canvas { pointer-events: none; } /* taps always target the button */
+
+    /* §8: ≥64px touch targets, offset by the safe-area insets. */
+    #btn-left, #btn-right { width: 92px; height: 72px; }
+    #btn-left {
+      left: calc(14px + env(safe-area-inset-left, 0px));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    #btn-right {
+      left: calc(118px + env(safe-area-inset-left, 0px));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    #btn-thrust {
+      width: 200px;
+      height: 72px;
+      right: calc(14px + env(safe-area-inset-right, 0px));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    #btn-obs {
+      width: 84px;
+      height: 48px;
+      right: calc(14px + env(safe-area-inset-right, 0px));
+      top: calc(14px + env(safe-area-inset-top, 0px));
+    }
+    /* Label canvases are drawn at 2x logical size and downscaled by CSS so
+       the stroke-font beam stays crisp on high-DPI screens. */
+    #btn-left canvas, #btn-right canvas { width: 36px; height: 36px; }
+    #btn-thrust canvas { width: 120px; height: 32px; }
+    #btn-obs canvas { width: 55px; height: 22px; }
 
     /* §8: portrait phones get a rotate hint above the (very short) canvas. */
     #rotate-hint { display: none; }
@@ -127,12 +196,25 @@
 
   <div id="stage">
     <canvas id="screen" width="2000" height="750"></canvas>
-    <!-- Touch hold-zones (§8): pointer events feed the same held-input set
-         as the keyboard; wired in app.js only on coarse-pointer devices. -->
-    <div id="touch" aria-hidden="true">
-      <div class="zone" id="zone-left" data-code="ZoneLeft">&#9664;</div>
-      <div class="zone" id="zone-thrust" data-code="ZoneThrust">&#9650;</div>
-      <div class="zone" id="zone-right" data-code="ZoneRight">&#9654;</div>
+  </div>
+
+  <!-- Touch arcade buttons (§8): ←/→ rotate pair bottom-left, wide THRUST
+       bottom-right, small OBS toggle top-right. Pointer events feed the same
+       held-input set as the keyboard; the empty canvases get their labels
+       drawn once with VectorFont at boot. Wired in app.js only on
+       coarse-pointer devices (CSS hides them everywhere else). -->
+  <div id="touch" aria-hidden="true">
+    <div class="abtn" id="btn-left" data-code="BtnLeft">
+      <canvas id="label-left" width="72" height="72"></canvas>
+    </div>
+    <div class="abtn" id="btn-right" data-code="BtnRight">
+      <canvas id="label-right" width="72" height="72"></canvas>
+    </div>
+    <div class="abtn" id="btn-thrust" data-code="BtnThrust">
+      <canvas id="label-thrust" width="240" height="64"></canvas>
+    </div>
+    <div class="abtn" id="btn-obs" data-code="BtnObs">
+      <canvas id="label-obs" width="110" height="44"></canvas>
     </div>
   </div>
 

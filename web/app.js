@@ -61,11 +61,11 @@
 
   const keys = new Set(); // currently-held input codes, read each physics tick
 
-  // "Zone*" codes are synthetic — added/removed by the touch hold-zones so
-  // touch feeds the exact same held-input mechanism as the keyboard (§8).
-  const ROTATE_LEFT = ["ArrowLeft", "KeyA", "ZoneLeft"];   // rotate +1 = CCW = tilt left (§2)
-  const ROTATE_RIGHT = ["ArrowRight", "KeyD", "ZoneRight"]; // rotate -1
-  const THRUST = ["ArrowUp", "KeyW", "Space", "ZoneThrust"];
+  // "Btn*" codes are synthetic — added/removed by the touch arcade buttons
+  // so touch feeds the exact same held-input mechanism as the keyboard (§8).
+  const ROTATE_LEFT = ["ArrowLeft", "KeyA", "BtnLeft"];   // rotate +1 = CCW = tilt left (§2)
+  const ROTATE_RIGHT = ["ArrowRight", "KeyD", "BtnRight"]; // rotate -1
+  const THRUST = ["ArrowUp", "KeyW", "Space", "BtnThrust"];
   const PREVENT = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"];
   const MODIFIERS = ["ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
                      "AltLeft", "AltRight", "MetaLeft", "MetaRight"];
@@ -81,8 +81,8 @@
   });
   window.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => {
-    keys.clear();        // no stuck keys on tab-away
-    touchHeld.clear();   // and no stuck touch zones either
+    keys.clear();      // no stuck keys on tab-away
+    clearTouchState(); // and no stuck arcade buttons either (§8)
   });
 
   // Edge-triggered (non-held) key actions.
@@ -124,18 +124,106 @@
 
   // ------------------------------------------------------------------- touch
 
-  // §8 touch controls: pointer events on the three hold-zones, multi-touch
-  // via pointerId -> code. Wired only on coarse-pointer devices (the CSS
-  // media query hides the zones elsewhere; this JS check keeps the listeners
-  // off entirely). Keyboard handling above is untouched — zones never see
-  // key events, so the O/R paths can't be swallowed here.
-  const touchHeld = new Map(); // pointerId -> synthetic input code
+  // §8 touch controls: arcade buttons (←/→ pair, wide THRUST, OBS toggle)
+  // plus tap routing on the bare canvas. Wired only on coarse-pointer
+  // devices (the CSS media query hides the buttons elsewhere; this JS check
+  // keeps the listeners off entirely). Keyboard handling above is untouched
+  // — buttons never see key events, so the O/R paths can't be swallowed.
+  //
+  // Each button tracks ITS OWN active pointers in a Set: the synthetic code
+  // is held exactly while that set is non-empty, so two thumbs on one button
+  // release cleanly and multi-touch across buttons (rotate+thrust, both
+  // rotates = net 0) just works. setPointerCapture keeps a press through a
+  // drift off the button (its pointerup still reaches the button); the
+  // pointerleave handler covers engines where capture isn't in effect (it
+  // never fires mid-press while capture holds). A press belongs to the
+  // button it started on — sliding onto a neighbor never presses it.
+  const touchButtons = []; // [{el, pointers}] so blur can clear everything
 
-  function handleTap() {
-    // §8: any tap leaves TITLE/ENDED (touch parity with "press any key" /
-    // "press space"). REVEAL/FLYING taps just feed the held set.
+  function clearTouchState() {
+    for (const b of touchButtons) {
+      b.pointers.clear();
+      b.el.classList.remove("pressed");
+    }
+  }
+
+  // Pointer event -> logical canvas coords. The canvas is CSS-scaled with
+  // the aspect preserved, so client px map to the 2000x750 logical grid by
+  // one uniform factor per axis (both equal; computed per axis anyway).
+  function canvasPoint(e, el) {
+    const r = el.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (2000 / r.width),
+      y: (e.clientY - r.top) * (750 / r.height),
+    };
+  }
+
+  const inRect = (p, b) =>
+    !!b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
+  // §8 tap routing on the BARE canvas. The preset hit-tests run BEFORE the
+  // any-key fallback: in TITLE a tap inside a preset-menu segment selects
+  // that preset and does NOT start an episode (parity with 1/2/3); in ENDED
+  // a tap on the persistent preset readout cycles trainee→cadet→commander.
+  // Hitboxes come from the renderer's last-drawn layout (canvas coords).
+  function handleCanvasTap(e) {
     if (state === "LOADING" || state === "ERROR") return;
-    if (state === "TITLE" || state === "ENDED") startEpisode(false);
+    e.preventDefault();
+    if (state === "TITLE") {
+      const p = canvasPoint(e, e.currentTarget);
+      for (const b of Renderer.presetMenuHitboxes || []) {
+        if (inRect(p, b)) {
+          selectPreset(b.preset); // select only — no episode start (§8)
+          return;
+        }
+      }
+      startEpisode(false); // bare-canvas tap = "any key"
+    } else if (state === "ENDED") {
+      const p = canvasPoint(e, e.currentTarget);
+      if (inRect(p, Renderer.presetReadoutHitbox)) {
+        selectPreset(PRESETS[(PRESETS.indexOf(preset) + 1) % PRESETS.length]);
+        return; // cycle only — the next episode picks it up via ensureGame
+      }
+      startEpisode(false); // tap anywhere else = fly again
+    }
+  }
+
+  function bindButton(el) {
+    const code = el.dataset.code; // BtnLeft | BtnRight | BtnThrust | BtnObs
+    const pointers = new Set();   // this button's active pointerIds
+    touchButtons.push({ el, pointers });
+
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // no synthesized mouse events / focus changes
+      try {
+        el.setPointerCapture(e.pointerId); // keep the hold if the finger drifts
+      } catch (_) { /* pointer already gone — release() still cleans up */ }
+      pointers.add(e.pointerId);
+      el.classList.add("pressed");
+      if (code === "BtnObs") {
+        // §8 OBS = touch parity with KeyO, same gating as handleKeyPress
+        // (ignored in LOADING/ERROR/REVEAL) — and never "any key".
+        if (state !== "LOADING" && state !== "ERROR" && state !== "REVEAL") {
+          overlay = !overlay;
+        }
+        return;
+      }
+      keys.add(code); // same held-input set the keyboard uses (§8)
+      // §8: arcade-button taps count as "any key" — a thumb already resting
+      // on THRUST when the episode starts behaves like held Space.
+      if (state === "TITLE" || state === "ENDED") startEpisode(false);
+    });
+
+    const release = (e) => {
+      if (!pointers.delete(e.pointerId)) return; // not ours / already released
+      if (pointers.size === 0) {
+        keys.delete(code);
+        el.classList.remove("pressed");
+      }
+    };
+    el.addEventListener("pointerup", release);
+    el.addEventListener("pointercancel", release);
+    el.addEventListener("pointerleave", release); // only fires uncaptured
   }
 
   function initTouch() {
@@ -143,27 +231,30 @@
                    window.matchMedia("(pointer: coarse)").matches;
     if (!coarse) return;
 
-    const stageEl = document.getElementById("stage");
-    stageEl.addEventListener("pointerdown", handleTap); // taps outside zones too
+    document.getElementById("screen")
+            .addEventListener("pointerdown", handleCanvasTap);
+    for (const el of document.querySelectorAll("#touch .abtn")) bindButton(el);
+  }
 
-    for (const zone of document.querySelectorAll("#touch .zone")) {
-      const code = zone.dataset.code;
-      zone.addEventListener("pointerdown", (e) => {
-        e.preventDefault(); // no synthesized mouse events / focus changes
-        zone.setPointerCapture(e.pointerId); // keep the hold if the finger drifts
-        touchHeld.set(e.pointerId, code);
-        keys.add(code); // same held-input set the keyboard uses (§8)
-      });
-      const release = (e) => {
-        const held = touchHeld.get(e.pointerId);
-        if (held) {
-          keys.delete(held);
-          touchHeld.delete(e.pointerId);
-        }
-      };
-      zone.addEventListener("pointerup", release);
-      zone.addEventListener("pointercancel", release);
-    }
+  // §8: button labels are stroke-font canvases painted exactly ONCE at boot
+  // (←/→ are font glyphs; THRUST and OBS are text) — never CSS text (§9,
+  // zero fillText). Canvases are 2x their CSS size for a crisp beam, with
+  // the same white glow as the tube. Drawn unconditionally: on fine-pointer
+  // devices the buttons stay display:none, so this paints nothing visible.
+  function drawButtonLabels() {
+    const paint = (id, text, size) => {
+      const c = document.getElementById(id);
+      const lctx = c.getContext("2d");
+      lctx.strokeStyle = "#fff";
+      lctx.shadowColor = "#fff";
+      lctx.shadowBlur = 6; // §9 glow
+      VectorFont.draw(lctx, text, c.width / 2, (c.height + size) / 2, size,
+                      { align: "center" });
+    };
+    paint("label-left", "←", 40);
+    paint("label-right", "→", 40);
+    paint("label-thrust", "THRUST", 36);
+    paint("label-obs", "OBS", 26);
   }
 
   // --------------------------------------------------------- python boundary
@@ -241,7 +332,7 @@
     if (state === "LOADING" || state === "ERROR") return;
 
     if (state === "FLYING") {
-      // Read held inputs (keys + touch zones), step Python, parse the frame.
+      // Read held inputs (keys + arcade buttons), step Python, parse the frame.
       const left = ROTATE_LEFT.some((k) => keys.has(k));
       const right = ROTATE_RIGHT.some((k) => keys.has(k));
       const rotate = (left ? 1 : 0) - (right ? 1 : 0); // +1 CCW / tilt left (§2)
@@ -401,6 +492,7 @@
   // ------------------------------------------------------------------ start
 
   Renderer.init(document.getElementById("screen"));
+  drawButtonLabels(); // §8: arcade-button labels, painted once
   initTouch();
   requestAnimationFrame(loop); // render LOADING immediately
   boot();

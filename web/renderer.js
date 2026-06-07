@@ -2,7 +2,10 @@
 /*
  * renderer.js — pure painting per CONTRACT §9/§10. No game logic, no Pyodide.
  *
- * Exposes a script-global `Renderer = { init(canvas), render(view) }` where view is:
+ * Exposes a script-global `Renderer = { init(canvas), render(view),
+ * presetMenuHitboxes, presetReadoutHitbox }` — the hitboxes are the §8 touch
+ * tap targets in logical canvas coords, refreshed whenever the preset menu /
+ * HUD readout is drawn. `view` is:
  *   {
  *     state:         "LOADING" | "TITLE" | "REVEAL" | "FLYING" | "ENDED" | "ERROR",
  *     stage:         string   (loading progress line),
@@ -272,10 +275,19 @@ const Renderer = (() => {
 
     // §8: small persistent difficulty readout under the right HUD block —
     // dim like the seed badge so it reads as instrumentation, not score.
+    // Side effect (§8 touch): publishes the readout rect on the Renderer
+    // object as `presetReadoutHitbox` (an ENDED tap there cycles presets).
     glow(false);
     ctx.strokeStyle = "#999";
-    VectorFont.draw(ctx, String(preset || "").toUpperCase(), 1925, 170, 18,
-                    { align: "right" });
+    const presetText = String(preset || "").toUpperCase();
+    VectorFont.draw(ctx, presetText, 1925, 170, 18, { align: "right" });
+    const presetW = VectorFont.measure(presetText, 18);
+    api.presetReadoutHitbox = {
+      x: 1925 - presetW - HIT_PAD,
+      y: 170 - 18 - HIT_PAD, // right-aligned at x=1925, baseline 170, size 18
+      w: presetW + 2 * HIT_PAD,
+      h: 18 + 2 * HIT_PAD,
+    };
   }
 
   // Small "SEED N" badge in the bottom-left corner (§8 ?seed=N, human only).
@@ -364,9 +376,16 @@ const Renderer = (() => {
     ["3 COMMANDER", "commander"],
   ];
 
+  // §8 touch hitboxes: ~12px of padding around the drawn text, in logical
+  // canvas coords (2000x750). Refreshed on every draw so app.js hit-tests
+  // taps against the LAST DRAWN layout (the active segment grows brackets).
+  const HIT_PAD = 12;
+
   // §8: the three presets on one centered line, the active one bracketed and
   // full white, the others dimmed — vector-monitor style, brightness only.
   // Segment layout via VectorFont.measure; each segment draws left-aligned.
+  // Side effect (§8 touch): publishes the segment rects on the Renderer
+  // object as `presetMenuHitboxes` ([{preset, x, y, w, h}]).
   function drawPresetMenu(preset, y) {
     const size = 24;
     const baseline = y + size / 2; // the menu row is laid out middle-based
@@ -376,11 +395,20 @@ const Renderer = (() => {
     );
     const widths = texts.map((t) => VectorFont.measure(t, size));
     let x = (W - widths.reduce((a, b) => a + b, 0) - 2 * sepW) / 2;
+    const boxes = [];
     for (let i = 0; i < texts.length; i++) {
       ctx.strokeStyle = PRESET_MENU[i][1] === preset ? "#fff" : "#888";
       VectorFont.draw(ctx, texts[i], x, baseline, size);
+      boxes.push({
+        preset: PRESET_MENU[i][1],
+        x: x - HIT_PAD,
+        y: baseline - size - HIT_PAD, // caps span baseline-size .. baseline
+        w: widths[i] + 2 * HIT_PAD,
+        h: size + 2 * HIT_PAD,
+      });
       x += widths[i] + sepW;
     }
+    api.presetMenuHitboxes = boxes;
     ctx.strokeStyle = "#fff";
   }
 
@@ -460,5 +488,15 @@ const Renderer = (() => {
     }
   }
 
-  return { init, render };
+  // §8 touch hitboxes ride on the Renderer object (logical canvas coords,
+  // null until first drawn): `presetMenuHitboxes` is set by drawPresetMenu
+  // (TITLE / attract REVEAL), `presetReadoutHitbox` by drawHud (FLYING /
+  // ENDED). app.js only consults them in the states that just drew them.
+  const api = {
+    init,
+    render,
+    presetMenuHitboxes: null,
+    presetReadoutHitbox: null,
+  };
+  return api;
 })();
