@@ -1,0 +1,133 @@
+"""Trained-policy forward pass + Game.set_policy/step_policy (CONTRACT §2/§11)."""
+
+import json
+import math
+import subprocess
+import sys
+import textwrap
+
+import pytest
+
+from moonlander.core import policy as policy_module
+from moonlander.core.game import Game
+from moonlander.core.policy import ACTIONS, FORMAT, Policy
+
+
+def policy_json(hidden=2, w1=None, b1=None, w2=None, b2=None):
+    """A valid §11 policy JSON string; weights default to zeros."""
+    return json.dumps({
+        "format": FORMAT,
+        "sizes": [14, hidden, 4],
+        "w1": w1 if w1 is not None else [[0.0] * 14 for _ in range(hidden)],
+        "b1": b1 if b1 is not None else [0.0] * hidden,
+        "w2": w2 if w2 is not None else [[0.0] * hidden for _ in range(4)],
+        "b2": b2 if b2 is not None else [0.0] * 4,
+    })
+
+
+# --------------------------------------------------------------- forward pass
+
+def test_zero_weights_tie_break_picks_action_0_noop():
+    p = Policy.from_json(policy_json())
+    assert p.act([0.5] * 14) == (0, False)  # all logits equal -> lowest index
+
+
+def test_bias_selects_each_action_with_envs_discrete4_mapping():
+    # §11: argmax index -> classic controls exactly as env.py's Discrete(4):
+    # 0 noop, 1 rotate left (+1 = CCW), 2 rotate right (-1), 3 thrust.
+    expected = {0: (0, False), 1: (1, False), 2: (-1, False), 3: (0, True)}
+    for idx, controls in expected.items():
+        b2 = [0.0] * 4
+        b2[idx] = 1.0
+        p = Policy.from_json(policy_json(b2=b2))
+        assert p.act([0.0] * 14) == controls
+
+
+def test_forward_pass_matches_hand_computed_reference():
+    # hidden=1: h = tanh(w1·obs + b1); logits = w2*h + b2 — recomputed here
+    # with raw math and compared against the module's decision.
+    obs = [0.1 * i for i in range(14)]
+    w1 = [[(-1.0) ** i * 0.2 for i in range(14)]]
+    b1 = [0.3]
+    w2 = [[1.0], [-2.0], [0.5], [0.0]]
+    b2 = [0.0, 0.1, -0.2, 0.05]
+
+    h = math.tanh(sum(w * x for w, x in zip(w1[0], obs)) + b1[0])
+    logits = [w2[k][0] * h + b2[k] for k in range(4)]
+    want = ACTIONS[max(range(4), key=logits.__getitem__)]
+
+    p = Policy.from_json(policy_json(hidden=1, w1=w1, b1=b1, w2=w2, b2=b2))
+    assert p.act(obs) == want
+
+
+def test_hidden_sign_flips_the_decision():
+    # Pins tanh + both matmuls: h > 0 makes logit[1] = 2h the max (rotate
+    # left); h < 0 makes the zero logits win, lowest index 2 (rotate right).
+    def mk(scale):
+        w1 = [[0.0] * 14]
+        w1[0][0] = scale
+        return Policy.from_json(policy_json(
+            hidden=1, w1=w1, w2=[[1.0], [2.0], [0.0], [0.0]]))
+
+    obs = [0.0] * 14
+    obs[0] = 1.0
+    assert mk(1.0).act(obs) == (1, False)
+    assert mk(-1.0).act(obs) == (-1, False)
+
+
+# ---------------------------------------------------------------- validation
+
+@pytest.mark.parametrize("mutate, match", [
+    (lambda d: d.update(format="mlp/v0"), "format"),
+    (lambda d: d.update(sizes=[14, 0, 4]), "sizes"),
+    (lambda d: d.update(sizes=[13, 2, 4]), "sizes"),
+    (lambda d: d.update(sizes=[14, 2]), "sizes"),
+    (lambda d: d.update(b1=[0.0]), "b1"),                       # wrong length
+    (lambda d: d["w1"][0].pop(), r"w1\[0\]"),                   # ragged row
+    (lambda d: d["w2"][1].__setitem__(0, float("nan")), r"w2\[1\]"),
+    (lambda d: d["b2"].__setitem__(2, "x"), "b2"),
+])
+def test_from_json_rejects_bad_payloads(mutate, match):
+    d = json.loads(policy_json())
+    mutate(d)
+    with pytest.raises(ValueError, match=match):
+        Policy.from_json(json.dumps(d))
+
+
+def test_from_json_rejects_non_object():
+    with pytest.raises(ValueError, match="object"):
+        Policy.from_json("[1, 2, 3]")
+
+
+# -------------------------------------------------------------------- purity
+
+def test_policy_module_imports_only_math_and_json():
+    # Fresh interpreter with json (and its transitive deps) PRELOADED into
+    # `before`, so the only new module the policy file may pull in is math;
+    # the only module references it may hold are math + json (the
+    # Pyodide-core rule, same style as the autopilot purity test).
+    code = textwrap.dedent(
+        """
+        import json  # preload json + its deps into `before`
+        import importlib.util, sys, types
+
+        path = sys.argv[1]
+        before = set(sys.modules)
+        spec = importlib.util.spec_from_file_location("pp_under_test", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        loaded = set(sys.modules) - before - {"pp_under_test"}
+        assert loaded <= {"math"}, f"unexpected imports loaded: {sorted(loaded)}"
+        held = {v.__name__ for v in vars(mod).values()
+                if isinstance(v, types.ModuleType)}
+        assert held <= {"math", "json"}, f"unexpected module refs: {sorted(held)}"
+        print("PURE")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, policy_module.__file__],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "PURE" in result.stdout
