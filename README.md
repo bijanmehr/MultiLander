@@ -115,9 +115,9 @@ same episode, byte-for-byte, in CI, in training, and in your browser.
 ## Deploying to GitHub Pages
 
 Already wired: `.github/workflows/pages.yml` tests, builds the wheel, and
-publishes `web/` on every push to `main`. One-time setup after pushing:
-**Settings → Pages → Source: GitHub Actions.** Your arena is then live at
-`https://<you>.github.io/<repo>/` — embed it anywhere with an `<iframe>`.
+publishes `web/` on every push to `main` (Pages source: GitHub Actions).
+Live at **https://bijanmehr.github.io/multi-lander/** — embed it anywhere
+with an `<iframe>`.
 The site ships two pages: the game, and `docs.html` — a same-theme mini-manual
 covering the controls, scoring, and the full RL interface.
 
