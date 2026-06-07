@@ -13,7 +13,9 @@ The most simplistic ML module that pilots one rocket:
   (already in the `[env]` extra; zero new dependencies).
 - The trained pilot **flies in the browser**: weights export to JSON, the forward pass
   is pure-stdlib Python inside the existing Pyodide core (same pattern as the autopilot).
-- An **`A` key / `AI` arcade button** toggles AI PILOT mode in the game.
+- A **`P` key / `AI` arcade button** toggles AI PILOT mode in the game.
+  (The chat design said `A`, but `KeyA` is already rotate-left in the WASD scheme —
+  `P` for PILOT avoids the conflict.)
 - A **separate webpage `web/ml.html`** (docs.html retro theme) explains all the machinery.
 
 Success bar (user choice): *visibly learned, lands sometimes* on TRAINEE. Training runs
@@ -102,7 +104,7 @@ deploys to Pages automatically and `ml.html` can draw the learning curve from it
 - Boot: after Pyodide is ready, `fetch("assets/policy.json")` (non-fatal on failure);
   keep the raw string in JS; call `game.set_policy(...)` now and again after every
   `ensureGame` rebuild (preset/lander-count changes).
-- **`A` key** toggles `aiPilot` in TITLE / FLYING / ENDED. Like `1/2/3` it is handled
+- **`P` key** toggles `aiPilot` in TITLE / FLYING / ENDED. Like `1/2/3` it is handled
   as a mode key and **never counts as "press any key"** (branch order in
   `handleKeyPress` is load-bearing — same pattern as presets, but allowed in FLYING too).
 - Tick: when FLYING and `aiPilot` and policy loaded → `game.step_policy()`; otherwise
@@ -114,7 +116,7 @@ deploys to Pages automatically and `ml.html` can draw the learning curve from it
 - Mode persists across episodes and resets (binge-watching); the `O` obs overlay works
   in AI mode and shows exactly the 14 numbers the net sees.
 - HUD: renderer draws **AI PILOT** (vector font) while engaged.
-- No policy loaded (fetch failed) → pressing A / tapping AI shows a transient
+- No policy loaded (fetch failed) → pressing P / tapping AI shows a transient
   `NO POLICY — RUN python -m moonlander.train_cem` screen-space message (~2 s).
 - **Mobile:** fifth chamfered-octagon arcade button `AI` (top-right, by OBS), same
   `.abtn` CSS and wiring pattern as the OBS button (edge-triggered toggle); label drawn
@@ -142,21 +144,21 @@ vector-font headings, monospace body, black/white, relative links, works from `f
    `fitness_history` (fetch; on failure — e.g. `file://` — show a fallback line:
    `SERVE THE SITE TO SEE THE TRAINING CURVE`); landing-rate eval vs the autopilot's;
    "trained on TRAINEE — switch difficulty to watch it struggle".
-7. **TRY IT** — press `A` on the game page; link back.
+7. **TRY IT** — press `P` on the game page; link back.
 
 Cross-links: game page footer and `docs.html` link to `ml.html`; `ml.html` links back.
-`docs.html` controls section gains the `A` key.
+`docs.html` controls section gains the `P` key.
 
 ### 7. Contract, docs, version (lockstep)
 
 - **CONTRACT.md** updated in the same change (it is load-bearing; tests cite sections):
   `set_policy`/`step_policy` semantics + error contract in §2; the `policy.json` schema
-  (new section); the `A` key, AI button, HUD indicator and take-over rule in §8;
+  (new section); the `P` key, AI button, HUD indicator and take-over rule in §8;
   revision bumped to 0.5.0.
 - **Version 0.4.0 → 0.5.0 in all four coupled spots** (the known footgun):
   `pyproject.toml`, `src/moonlander/__init__.py`, the hardcoded wheel URL in
   `web/app.js`, CONTRACT §8. Rebuild the wheel via `scripts/build_web.sh`.
-- README: controls line gains `A`; Training section gains the one-liner
+- README: controls line gains `P`; Training section gains the one-liner
   `python -m moonlander.train_cem`; roadmap row updated (phase 4 partially delivered —
   simplest-possible baseline before PPO).
 - DESIGN.md: decisions row (CEM chosen as the simplest teachable baseline; PPO still
