@@ -47,8 +47,6 @@ class Config:
     terrain_points: int = 257  # 2^8 + 1 vertices across [0, world_w]
     terrain_y_min: float = 60.0
     terrain_y_max: float = 480.0
-    terrain_init_lo: float = 120.0  # endpoint heights drawn uniform from [lo, hi]
-    terrain_init_hi: float = 300.0
     terrain_displacement: float = 210.0  # initial midpoint displacement amplitude
     terrain_decay: float = 0.62  # amplitude multiplier per subdivision level
     n_stars: int = 100

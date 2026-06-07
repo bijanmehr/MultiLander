@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LUNAR LANDER — THE MANUAL</title>
+  <!-- Docs page (CONTRACT §8): standalone — no Pyodide, no frameworks, no
+       external fonts. Loads vectorfont.js only; headings are small canvases
+       painted with the stroke font, body text is plain monospace. Relative
+       links only, so the page works from file:// and from any subpath. -->
+  <meta name="description" content="Manual for the LUNAR LANDER arcade + RL arena: controls, scoring, difficulty, and the full Gymnasium interface (observations, actions, reward, seeds).">
+  <meta property="og:title" content="LUNAR LANDER — THE MANUAL">
+  <meta property="og:description" content="Controls, scoring, difficulty, and the full reinforcement-learning interface.">
+  <meta property="og:type" content="website">
+  <!-- Same inline SVG favicon as the game (white lander outline on black). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg stroke='%23fff' fill='none' stroke-width='1.6'%3E%3Cpath d='M11 17v-5l3-3h4l3 3v5z'/%3E%3Cpath d='M9 17h14'/%3E%3Cpath d='M11 17l-4 7m18-7l4 7'/%3E%3Cpath d='M4 24h6m12 0h6'/%3E%3C/g%3E%3C/svg%3E">
+  <style>
+    /* Same tube as the game: pure black, glowing strokes for display
+       lettering — but the BODY text stays plain monospace for readability
+       (§8): #ddd on black, generous line-height, restrained glow. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+    }
+    body {
+      color: #ddd;
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 1.2rem 1.2rem 3rem;
+    }
+
+    /* Stroke-font headings: each is a small canvas sized by the inline
+       helper below; CSS only caps them on narrow screens. */
+    canvas[data-h] {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 2.4rem 0 0.4rem;
+    }
+    #masthead { margin: 1.4rem 0 0.2rem; }
+
+    a {
+      color: #bbb;
+      text-decoration: none;
+      border-bottom: 1px dotted #666;
+    }
+    a:hover { color: #fff; }
+    .back {
+      display: inline-block;
+      margin: 0.8rem 0;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+    }
+
+    pre {
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      padding: 0.8rem 1rem;
+      overflow-x: auto;
+      color: #cfcfcf;
+      line-height: 1.5;
+    }
+    code { color: #fff; }
+
+    table {
+      border-collapse: collapse;
+      margin: 0.6rem 0 1rem;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 0.25rem 0.6rem;
+      text-align: left;
+    }
+    th { color: #fff; font-weight: 400; letter-spacing: 0.08em; }
+    td { color: #ccc; }
+    td.n, th.n { text-align: right; }
+
+    ul { padding-left: 1.4rem; }
+    li { margin: 0.15rem 0; }
+    .dim { color: #888; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="index.html">&larr; BACK TO THE GAME</a>
+
+    <canvas id="masthead" data-h="LUNAR LANDER — THE MANUAL" data-size="34"></canvas>
+
+    <canvas data-h="WHAT IS THIS"></canvas>
+    <p>
+      The 1979 arcade classic, rebuilt as a reinforcement-learning arena.
+      One pure-Python physics core (stdlib only, ~30&nbsp;KB wheel) does
+      everything: it trains your agents through Gymnasium, and it runs live
+      in the browser via Pyodide (CPython on WebAssembly). JS never simulates
+      — it only draws what Python computes, 60 times a second. Same seed
+      &rarr; same episode, byte-for-byte, in CI, in training, and in your
+      browser. The title screen is a live demo: a built-in autopilot flying
+      three real landers, collisions welcome.
+    </p>
+
+    <canvas data-h="HOW TO FLY"></canvas>
+    <ul>
+      <li><code>&larr;</code>/<code>A</code> and <code>&rarr;</code>/<code>D</code> — rotate (left key tilts the nose left)</li>
+      <li><code>&uarr;</code>/<code>W</code>/<code>Space</code> — main engine (burns fuel; at zero the engines are dead)</li>
+      <li><code>R</code> — new episode &nbsp;&middot;&nbsp; <code>O</code> — agent view (the 14 values a policy would see)</li>
+      <li><code>1</code>/<code>2</code>/<code>3</code> — difficulty (title and end screens only, never mid-flight)</li>
+      <li>Touch: left/right thirds rotate, bottom-center thrusts; multi-touch works</li>
+      <li><code>?seed=123</code> in the URL — every human episode uses that seed (put a whole classroom on the same terrain)</li>
+    </ul>
+    <p>
+      <strong>Landing:</strong> put both feet inside a pad, upright. Slow
+      enough (|vx| &le; 12 and |vy| &le; 18) is a <em>perfect</em> landing
+      worth 50 &times; the pad multiplier; a harder arrival (|vx| &le; 25,
+      |vy| &le; 35) still counts for 15 &times; the multiplier; anything
+      faster, tilted, or off the pad is a crash. Pads pay
+      <code>2X</code>/<code>3X</code>/<code>5X</code> — narrower pads pay
+      more. Flying off either side or above the world is a crash.
+    </p>
+    <p>
+      <strong>Company:</strong> landers are solid. Two flying landers that
+      meet crash both; flying into a lander that has already landed crashes
+      you and leaves it (and its banked points) untouched — blocking a pad
+      is legal strategy.
+    </p>
+
+    <canvas data-h="DIFFICULTY"></canvas>
+    <p>
+      Three presets — terrain ruggedness, pad widths, fuel budget and spawn
+      drift change; the physics never does. The selection persists and
+      applies to both your episodes and the attract mode.
+    </p>
+    <table>
+      <tr><th>preset</th><th class="n">displacement</th><th class="n">decay</th><th class="n">y_max</th><th>pad widths 2X/3X/5X</th><th class="n">fuel</th><th class="n">spawn vx</th></tr>
+      <tr><td>TRAINEE</td><td class="n">140</td><td class="n">0.52</td><td class="n">380</td><td>130 / 95 / 60</td><td class="n">1200</td><td class="n">&plusmn;15</td></tr>
+      <tr><td>CADET</td><td class="n">210</td><td class="n">0.62</td><td class="n">480</td><td>110 / 75 / 45</td><td class="n">1000</td><td class="n">&plusmn;25</td></tr>
+      <tr><td>COMMANDER</td><td class="n">260</td><td class="n">0.68</td><td class="n">560</td><td>90 / 60 / 36</td><td class="n">850</td><td class="n">&plusmn;40</td></tr>
+    </table>
+    <p class="dim">
+      The ladder doubles as an RL curriculum: train trainee &rarr; cadet
+      &rarr; commander with the same reward and physics throughout.
+    </p>
+
+    <canvas data-h="THE RL ENVIRONMENT"></canvas>
+    <pre><code>import gymnasium, moonlander
+
+env = gymnasium.make("MoonLander-v0")            # classic rotate+thrust
+# or: MoonLanderEnv(mode="gym")                  # LunarLander-style engines
+# or: MoonLanderEnv(obs_mode="radar")            # partial observability
+# or: MoonLanderEnv(preset="trainee")            # the difficulty curriculum
+# or: MoonLanderEnv(frame_skip=4)                # 4 physics ticks per step
+
+obs, info = env.reset(seed=42)                   # info["terrain"] = terrain dict
+obs, r, term, trunc, info = env.step(env.action_space.sample())
+if term: print(info["outcome"])                  # {"kind": "perfect", "mult": 5, ...}</code></pre>
+    <p>
+      <code>action_space = Discrete(4)</code> &nbsp;&middot;&nbsp;
+      <code>observation_space = Box(-10, 10, (14,), float32)</code>.
+      In classic mode the four actions are noop / rotate-left /
+      rotate-right / thrust; in gym mode they fire engines — noop / left /
+      main / right. Episodes truncate at <code>max_steps</code> physics
+      ticks; stepping a finished episode raises <code>RuntimeError</code>.
+      On the terminal step <code>info</code> carries <code>outcome</code>,
+      <code>is_success</code> and <code>score</code>.
+    </p>
+
+    <canvas data-h="OBSERVATIONS"></canvas>
+    <p>
+      14 floats, world-size-relative. The target pad is the nearest by
+      euclidean distance to the pad center.
+    </p>
+    <table>
+      <tr><th class="n">idx</th><th>value</th><th>formula</th></tr>
+      <tr><td class="n">0</td><td>x (normalized)</td><td><code>x / world_w * 2 - 1</code></td></tr>
+      <tr><td class="n">1</td><td>y (normalized)</td><td><code>y / world_h * 2 - 1</code></td></tr>
+      <tr><td class="n">2</td><td>vx</td><td><code>vx / 60</code></td></tr>
+      <tr><td class="n">3</td><td>vy</td><td><code>vy / 60</code></td></tr>
+      <tr><td class="n">4</td><td>sin(angle)</td><td><code>sin(angle)</code></td></tr>
+      <tr><td class="n">5</td><td>cos(angle)</td><td><code>cos(angle)</code></td></tr>
+      <tr><td class="n">6</td><td>angular velocity</td><td><code>ang_vel / 3</code></td></tr>
+      <tr><td class="n">7</td><td>fuel fraction</td><td><code>fuel / fuel_init</code></td></tr>
+      <tr><td class="n">8</td><td>dx to target pad</td><td><code>(pad_cx - x) / world_w</code></td></tr>
+      <tr><td class="n">9</td><td>dy to target pad</td><td><code>(pad_y - y) / world_h</code></td></tr>
+      <tr><td class="n">10</td><td>pad half-width</td><td><code>(x1 - x0) / 2 / 100</code></td></tr>
+      <tr><td class="n">11</td><td>terrain clearance</td><td><code>(y - lander_bottom - ground_y(x)) / world_h</code></td></tr>
+      <tr><td class="n">12</td><td>pad multiplier</td><td><code>mult / 5</code></td></tr>
+      <tr><td class="n">13</td><td>pad visible</td><td><code>1.0</code> or <code>0.0</code></td></tr>
+    </table>
+
+    <canvas data-h="SENSOR MODES"></canvas>
+    <p>
+      Truth lives in the core; perception is a filter. The frame JSON always
+      carries the truth — <code>obs</code> is what a policy sees, shaped by
+      <code>obs_mode</code>:
+    </p>
+    <ul>
+      <li><code>"full"</code> — indices 8–12 always populated, index 13 always 1.0</li>
+      <li><code>"radar"</code> — beyond <code>radar_range</code> of the
+        nearest pad, indices 8, 9, 10, 12 read 0.0 and index 13 reads 0.0:
+        the agent must explore to find a pad</li>
+    </ul>
+    <p class="dim">
+      Documented but not yet implemented: a lidar mode (terrain rays, no pad
+      oracle), seeded sensor noise, and other-lander slots for the
+      multi-agent env.
+    </p>
+
+    <canvas data-h="REWARD"></canvas>
+    <pre><code>φ(s)  = -1.0 * dist - 0.5 * speed - 0.5 * |sin angle|
+        dist  = (min over pads of euclidean distance to pad center) / world_w
+        speed = hypot(vx, vy) / 60
+r_t   = 10 * (φ(s') - φ(s)) - 0.06 * (1 if main engine actually fired else 0)
+terminal: perfect → +100 + 10*mult;  hard → +30;  crash → -100</code></pre>
+    <p>
+      The shaping is potential-based, so it is policy-invariant, and the
+      min-over-pads potential stays continuous when the nearest pad
+      switches — no fake reward at the boundary.
+    </p>
+    <p>
+      <strong>Training note</strong> (audit-verified): at
+      <code>frame_skip=1</code> a good landing is ~1300+ decisions, so with
+      &gamma;&nbsp;=&nbsp;0.99 the terminal reward is discounted to ~0.0002
+      and <em>hovering beats landing</em> in discounted return. Train with
+      <code>frame_skip=4</code> and <code>gamma &ge; 0.997</code> (0.999
+      recommended). frame_skip up to 8 preserves the autopilot landing rate
+      (within one seed of <code>k=1</code> on cadet seeds 0&ndash;29).
+    </p>
+
+    <canvas data-h="MULTI-LANDER"></canvas>
+    <p>
+      The single-agent env wraps <code>Game(n_landers=1)</code>, but the core
+      is multi-lander: one world, shared terrain, solid collisions, each
+      lander with its own fuel, score, and fate. (A PettingZoo wrapper is a
+      later phase.)
+    </p>
+    <pre><code>from moonlander.core.game import Game
+g = Game(n_landers=3)                              # one world, three landers
+g.reset(seed=7)                                    # shared terrain, spread spawns
+g.step_all('[[1, true], [0, false], [-1, true]]')  # solid: collisions crash both</code></pre>
+
+    <canvas data-h="DETERMINISM + SEEDS"></canvas>
+    <ul>
+      <li>All randomness flows through one <code>random.Random(seed)</code>
+        per episode: same preset + same seed = byte-identical terrain, pads,
+        stars, and spawns (different presets differ on the same seed, by
+        design).</li>
+      <li><code>env.reset(seed=k)</code> follows the gymnasium
+        <code>np_random</code> chain — the Game seed is derived, so the
+        terrain's <code>seed</code> field &ne; k.</li>
+      <li><code>env.reset(options={"game_seed": k})</code> seeds the Game
+        directly — byte-identical to the web game's <code>?seed=k</code>.
+        That is the bridge between a training run and what you watch in the
+        browser.</li>
+    </ul>
+
+    <canvas data-h="ROADMAP"></canvas>
+    <p>
+      Algorithm <strong>arena</strong> (train different algorithms, watch
+      them fly side by side on identical seeds) &rarr;
+      <strong>competition</strong> (multi-agent, pad-blocking strategy,
+      collision risk, comm channels) &rarr; <strong>human + AI co-op</strong>
+      (you fly one lander, the agent flies the other).
+    </p>
+
+    <a class="back" href="index.html">&larr; BACK TO THE GAME</a>
+  </main>
+
+  <script src="vectorfont.js"></script>
+  <script>
+    // Shared heading painter: every <canvas data-h="..."> becomes a stroke-
+    // font heading (§8/§9 — display lettering is never CSS text). Canvases
+    // are sized to their text via VectorFont.measure, then drawn once with
+    // the same white beam + glow as the game.
+    for (const c of document.querySelectorAll("canvas[data-h]")) {
+      const size = Number(c.dataset.size || 24);
+      c.width = Math.ceil(VectorFont.measure(c.dataset.h, size)) + 16;
+      c.height = Math.ceil(size * 1.6);
+      const ctx = c.getContext("2d");
+      ctx.strokeStyle = "#fff";
+      ctx.shadowColor = "#fff";
+      ctx.shadowBlur = 6;
+      VectorFont.draw(ctx, c.dataset.h, 8, size * 1.3, size);
+    }
+  </script>
+</body>
+</html>

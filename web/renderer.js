@@ -24,11 +24,12 @@
  *
  * World-space drawing (terrain, pads, labels, stars, landers, debris) goes
  * through the camera transform; HUD, banners, title and overlay stay in
- * screen space (§9) with fonts ~1.6x v1 so they read at the wider canvas's
- * CSS scale. Blink timing comes from Effects.blink().
+ * screen space (§9). ALL text goes through the stroke font (vectorfont.js)
+ * — zero fillText (§9); the font inherits whatever strokeStyle/glow the
+ * painter has set. Blink timing comes from Effects.blink().
  *
  * Target look: 1979 Atari Lunar Lander vector monitor — pure black, thin
- * glowing white strokes, monospace uppercase text.
+ * glowing white strokes, angular stroke-font uppercase text.
  */
 
 const Renderer = (() => {
@@ -48,9 +49,6 @@ const Renderer = (() => {
   // at s=1, cx=1000, cy=375 these are identical to x and H - y.
   const wx = (x) => (x - cam.cx) * cam.s + W / 2;
   const wy = (y) => (cam.cy - y) * cam.s + H / 2;
-
-  const font = (px) =>
-    `${px}px ui-monospace, Menlo, Consolas, "Courier New", monospace`;
 
   function glow(on) {
     ctx.shadowColor = "#fff";
@@ -74,11 +72,10 @@ const Renderer = (() => {
     ctx.stroke();
   }
 
+  // Centered stroke-font line; `y` is the vertical CENTER of the caps (the
+  // middle-baseline convention all the banner layouts are written in).
   function centeredText(text, y, size) {
-    ctx.font = font(size);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, W / 2, y);
+    VectorFont.draw(ctx, text, W / 2, y + size / 2, size, { align: "center" });
   }
 
   // Wrap an arbitrary message into lines of at most `max` characters.
@@ -132,19 +129,17 @@ const Renderer = (() => {
   function drawPads(pads) {
     glow(true);
     ctx.strokeStyle = "#fff";
-    ctx.fillStyle = "#fff";
     for (const pad of pads) {
       const y = wy(pad.y);
       // Brighter double stroke on top of the terrain line (§9); the 3-unit
       // gap between the strokes is world-space, so it scales with the camera.
       line(wx(pad.x0), y, wx(pad.x1), y, 2.5);
       line(wx(pad.x0), y + 3 * cam.s, wx(pad.x1), y + 3 * cam.s, 1.5);
-      // Multiplier label, centered under the pad at world y = pad.y - 25.
-      // World-space text, ~1.6x the v1 size so it reads at the CSS scale.
-      ctx.font = font(24 * cam.s);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`${pad.mult}X`, wx((pad.x0 + pad.x1) / 2), wy(pad.y - 25));
+      // Multiplier label, stroke font centered under the pad: 20 world units
+      // of cap height with the baseline at pad.y - 35, so the camera scales
+      // it like everything else in the scene (§9).
+      VectorFont.draw(ctx, `${pad.mult}X`, wx((pad.x0 + pad.x1) / 2),
+                      wy(pad.y - 35), 20 * cam.s, { align: "center" });
     }
   }
 
@@ -236,21 +231,19 @@ const Renderer = (() => {
 
   // -------------------------------------------------------------------- HUD
 
+  const HUD_SIZE = 26; // §9: HUD rows at ~26px cap height
+
   // One HUD row: label left-aligned, value right-aligned (arcade style).
   function hudRow(label, value, labelX, valueX, y) {
-    ctx.textAlign = "left";
-    ctx.fillText(label, labelX, y);
-    ctx.textAlign = "right";
-    ctx.fillText(value, valueX, y);
+    VectorFont.draw(ctx, label, labelX, y, HUD_SIZE, { align: "left" });
+    VectorFont.draw(ctx, value, valueX, y, HUD_SIZE, { align: "right" });
   }
 
   // Screen-space, always the live frame values regardless of camera (§10).
   // hud reflects lander 0 (§4); FUEL comes from landers[0] likewise.
   function drawHud(frame, sessionScore, high, preset) {
     glow(true);
-    ctx.fillStyle = "#fff";
-    ctx.font = font(27); // ~1.6x v1's 17px (§9)
-    ctx.textBaseline = "alphabetic";
+    ctx.strokeStyle = "#fff";
 
     // TIME as MM SS (§9).
     const mm = String(Math.floor(frame.t / 60)).padStart(2, "0");
@@ -263,33 +256,33 @@ const Renderer = (() => {
     hudRow("FUEL", String(Math.floor(frame.landers[0].fuel)), 40, 440, 170);
 
     // Top-right: ALTITUDE / HORIZONTAL SPEED / VERTICAL SPEED with
-    // direction-of-motion arrows; magnitudes shown, arrow gives the sign.
+    // direction-of-motion arrows (stroke-font glyphs); magnitudes shown,
+    // the arrow gives the sign.
     const hud = frame.hud;
-    hudRow("ALTITUDE", String(hud.altitude), 1480, 1925, 56);
-    hudRow("HORIZONTAL SPEED", String(Math.abs(hud.hspeed)), 1480, 1925, 94);
-    hudRow("VERTICAL SPEED", String(Math.abs(hud.vspeed)), 1480, 1925, 132);
+    hudRow("ALTITUDE", String(hud.altitude), 1390, 1925, 56);
+    hudRow("HORIZONTAL SPEED", String(Math.abs(hud.hspeed)), 1390, 1925, 94);
+    hudRow("VERTICAL SPEED", String(Math.abs(hud.vspeed)), 1390, 1925, 132);
 
-    ctx.textAlign = "left";
-    if (hud.hspeed !== 0) ctx.fillText(hud.hspeed > 0 ? "→" : "←", 1942, 94);
-    if (hud.vspeed !== 0) ctx.fillText(hud.vspeed > 0 ? "↑" : "↓", 1942, 132);
+    if (hud.hspeed !== 0) {
+      VectorFont.draw(ctx, hud.hspeed > 0 ? "→" : "←", 1942, 94, HUD_SIZE);
+    }
+    if (hud.vspeed !== 0) {
+      VectorFont.draw(ctx, hud.vspeed > 0 ? "↑" : "↓", 1942, 132, HUD_SIZE);
+    }
 
     // §8: small persistent difficulty readout under the right HUD block —
     // dim like the seed badge so it reads as instrumentation, not score.
     glow(false);
-    ctx.fillStyle = "#999";
-    ctx.font = font(20);
-    ctx.textAlign = "right";
-    ctx.fillText(String(preset || "").toUpperCase(), 1925, 170);
+    ctx.strokeStyle = "#999";
+    VectorFont.draw(ctx, String(preset || "").toUpperCase(), 1925, 170, 18,
+                    { align: "right" });
   }
 
   // Small "SEED N" badge in the bottom-left corner (§8 ?seed=N, human only).
   function drawSeed(seed) {
     glow(false);
-    ctx.fillStyle = "#777";
-    ctx.font = font(20);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText(`SEED ${seed}`, 40, H - 22);
+    ctx.strokeStyle = "#777";
+    VectorFont.draw(ctx, `SEED ${seed}`, 40, H - 22, 18, { align: "left" });
   }
 
   // ------------------------------------------------------ agent-view overlay
@@ -313,7 +306,9 @@ const Renderer = (() => {
   ];
 
   function drawObsOverlay(obs) {
-    const px = 30, py = 195, pw = 560;
+    // The stroke font runs wider than the old monospace (advance 13/14 of
+    // the cap height), so the panel is wider and the rows a touch smaller.
+    const px = 30, py = 195, pw = 620;
     const rowH = 30;
     const ph = 24 + 38 + OBS_LABELS.length * rowH + 16;
 
@@ -326,21 +321,15 @@ const Renderer = (() => {
     ctx.lineWidth = 1;
     ctx.strokeRect(px, py, pw, ph);
 
-    ctx.fillStyle = "#fff";
-    ctx.textBaseline = "alphabetic";
+    VectorFont.draw(ctx, "AGENT VIEW", px + 18, py + 36, 20);
 
-    ctx.font = font(22); // ~1.6x v1 (§9)
-    ctx.textAlign = "left";
-    ctx.fillText("AGENT VIEW", px + 18, py + 36);
-
-    ctx.font = font(21);
     for (let i = 0; i < OBS_LABELS.length; i++) {
       const v = obs[i];
       const y = py + 36 + 32 + i * rowH;
-      ctx.textAlign = "left";
-      ctx.fillText(`${i.toString().padStart(2, " ")} ${OBS_LABELS[i]}`, px + 18, y);
-      ctx.textAlign = "right";
-      ctx.fillText((v >= 0 ? "+" : "") + v.toFixed(3), px + pw - 18, y);
+      VectorFont.draw(ctx, `${i.toString().padStart(2, " ")} ${OBS_LABELS[i]}`,
+                      px + 18, y, 17);
+      VectorFont.draw(ctx, (v >= 0 ? "+" : "") + v.toFixed(3),
+                      px + pw - 18, y, 17, { align: "right" });
     }
   }
 
@@ -348,22 +337,22 @@ const Renderer = (() => {
 
   function drawLoading(stage) {
     glow(true);
-    ctx.fillStyle = "#fff";
-    if (Effects.blink()) centeredText("INSERT COIN", 300, 64);
-    centeredText("LOADING LUNAR MODULE...", 390, 32);
-    ctx.fillStyle = "#aaa";
-    centeredText(String(stage || "").toUpperCase(), 440, 22);
+    ctx.strokeStyle = "#fff";
+    if (Effects.blink()) centeredText("INSERT COIN", 300, 48);
+    centeredText("LOADING LUNAR MODULE...", 390, 26);
+    ctx.strokeStyle = "#aaa";
+    centeredText(String(stage || "").toUpperCase(), 440, 18);
   }
 
   function drawError(message) {
     glow(true);
-    ctx.fillStyle = "#fff";
-    centeredText("BOOT FAILURE", 280, 52);
-    ctx.fillStyle = "#ccc";
+    ctx.strokeStyle = "#fff";
+    centeredText("BOOT FAILURE", 280, 40);
+    ctx.strokeStyle = "#ccc";
     const lines = wrapText(String(message || "UNKNOWN ERROR").toUpperCase(), 90);
-    lines.slice(0, 6).forEach((l, i) => centeredText(l, 350 + i * 34, 22));
-    ctx.fillStyle = "#888";
-    centeredText("RUN scripts/build_web.sh THEN RELOAD", 620, 22);
+    lines.slice(0, 6).forEach((l, i) => centeredText(l, 350 + i * 34, 18));
+    ctx.strokeStyle = "#888";
+    centeredText("RUN scripts/build_web.sh THEN RELOAD", 620, 18);
   }
 
   // Title layout (§10): big LUNAR LANDER + blinking PRESS ANY KEY over the
@@ -377,22 +366,22 @@ const Renderer = (() => {
 
   // §8: the three presets on one centered line, the active one bracketed and
   // full white, the others dimmed — vector-monitor style, brightness only.
+  // Segment layout via VectorFont.measure; each segment draws left-aligned.
   function drawPresetMenu(preset, y) {
-    ctx.font = font(26);
-    ctx.textBaseline = "middle";
-    const sepW = ctx.measureText("   ").width;
+    const size = 24;
+    const baseline = y + size / 2; // the menu row is laid out middle-based
+    const sepW = VectorFont.measure("   ", size);
     const texts = PRESET_MENU.map(([label, name]) =>
       name === preset ? `[ ${label} ]` : label
     );
-    const widths = texts.map((t) => ctx.measureText(t).width);
+    const widths = texts.map((t) => VectorFont.measure(t, size));
     let x = (W - widths.reduce((a, b) => a + b, 0) - 2 * sepW) / 2;
-    ctx.textAlign = "left";
     for (let i = 0; i < texts.length; i++) {
-      ctx.fillStyle = PRESET_MENU[i][1] === preset ? "#fff" : "#888";
-      ctx.fillText(texts[i], x, y);
+      ctx.strokeStyle = PRESET_MENU[i][1] === preset ? "#fff" : "#888";
+      VectorFont.draw(ctx, texts[i], x, baseline, size);
       x += widths[i] + sepW;
     }
-    ctx.fillStyle = "#fff";
+    ctx.strokeStyle = "#fff";
   }
 
   function drawTitle(preset) {
@@ -401,24 +390,24 @@ const Renderer = (() => {
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
     ctx.fillRect(0, 0, W, H);
     glow(true);
-    ctx.fillStyle = "#fff";
-    centeredText("LUNAR LANDER", 290, 90);
-    if (Effects.blink()) centeredText("PRESS ANY KEY", 380, 32);
+    ctx.strokeStyle = "#fff";
+    centeredText("LUNAR LANDER", 290, 80); // §9: title lettering ~80px caps
+    if (Effects.blink()) centeredText("PRESS ANY KEY", 380, 26);
     drawPresetMenu(preset, 450);
   }
 
   function drawOutcomeBanner(outcome) {
     glow(true);
-    ctx.fillStyle = "#fff";
+    ctx.strokeStyle = "#fff";
     if (outcome.kind === "perfect") {
-      centeredText(`A PERFECT LANDING  +${outcome.points} POINTS`, 285, 42);
+      centeredText(`A PERFECT LANDING  +${outcome.points} POINTS`, 285, 40);
     } else if (outcome.kind === "hard") {
-      centeredText(`A GOOD LANDING  +${outcome.points} POINTS`, 285, 42);
+      centeredText(`A GOOD LANDING  +${outcome.points} POINTS`, 285, 40);
     } else {
-      centeredText("YOU JUST DESTROYED A 100 MEGABUCK LANDER", 285, 42);
-      centeredText(String(outcome.reason || "").toUpperCase(), 340, 26);
+      centeredText("YOU JUST DESTROYED A 100 MEGABUCK LANDER", 285, 40);
+      centeredText(String(outcome.reason || "").toUpperCase(), 340, 24);
     }
-    if (Effects.blink()) centeredText("PRESS SPACE TO FLY AGAIN", 425, 26);
+    if (Effects.blink()) centeredText("PRESS SPACE TO FLY AGAIN", 425, 24);
   }
 
   // ------------------------------------------------------------- entry point

@@ -383,7 +383,7 @@
       stage = "INSTALLING MOONLANDER WHEEL";
       const micropip = py.pyimport("micropip");
       await micropip.install(
-        new URL("assets/moonlander-0.3.0-py3-none-any.whl", location.href).href
+        new URL("assets/moonlander-0.4.0-py3-none-any.whl", location.href).href
       );
 
       stage = "CREATING GAME";

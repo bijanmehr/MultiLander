@@ -31,36 +31,17 @@
 
     /* ------------------------------------------------- header / tagline */
     header {
-      display: flex;
-      align-items: center;
-      gap: 0.8rem;
-      padding: 0.7rem 0 0.1rem;
-      color: #fff;
+      padding: 0.7rem 0 0.35rem;
       user-select: none;
     }
-    /* Small lander glyph next to the title — inline SVG, white strokes with
-       a soft glow filter so it matches the tube (§8). */
-    header svg {
-      width: 34px;
-      height: 34px;
-      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.7));
-    }
-    header h1 {
-      margin: 0;
-      font-size: 1.45rem;
-      font-weight: 400;
-      letter-spacing: 0.38em;
-      /* Glowing vector lettering: stacked white text-shadows, no color. */
-      text-shadow: 0 0 2px #fff, 0 0 9px rgba(255, 255, 255, 0.75);
-    }
-    .tagline {
-      color: #888;
-      font-size: 11px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      margin: 0.25rem 0 0.55rem;
-      text-align: center;
-      user-select: none;
+    /* §8/§9: the display lettering is DRAWN — lander polylines + the stroke
+       font on one canvas (painted once at load by the inline script below);
+       no CSS-styled text. CSS only scales the 1600x170 logical canvas. */
+    #header {
+      display: block;
+      width: min(92vw, 720px);
+      height: auto;
+      aspect-ratio: 1600 / 170;
     }
 
     /* --------------------------------------------------- canvas / stage */
@@ -137,18 +118,11 @@
 </head>
 <body>
   <header>
-    <!-- Lander glyph: same shape family as the canvas lander (§9). -->
-    <svg viewBox="0 0 32 32" aria-hidden="true">
-      <g stroke="#fff" fill="none" stroke-width="1.6">
-        <path d="M11 17v-5l3-3h4l3 3v5z"/>
-        <path d="M9 17h14"/>
-        <path d="M11 17l-4 7m18-7l4 7"/>
-        <path d="M4 24h6m12 0h6"/>
-      </g>
-    </svg>
-    <h1>LUNAR LANDER</h1>
+    <!-- §8/§9: title + tagline drawn once at load with the stroke font and
+         the game's actual lander polylines (see the inline script below). -->
+    <canvas id="header" width="1600" height="170"
+            role="img" aria-label="LUNAR LANDER — a classic 1979 arcade, rebuilt as a reinforcement-learning arena"></canvas>
   </header>
-  <div class="tagline">A CLASSIC 1979 ARCADE &mdash; REBUILT AS A REINFORCEMENT-LEARNING ARENA</div>
   <div id="rotate-hint">ROTATE YOUR DEVICE</div>
 
   <div id="stage">
@@ -164,15 +138,77 @@
 
   <footer>
     &larr;/A &rarr;/D rotate &nbsp;&middot;&nbsp; &uarr;/W/space thrust &nbsp;&middot;&nbsp; 1/2/3 difficulty &nbsp;&middot;&nbsp; R new episode &nbsp;&middot;&nbsp; O agent view
+    &nbsp;&middot;&nbsp; <a href="docs.html">DOCS</a>
     &nbsp;&middot;&nbsp; <a href="#">GITHUB</a><!-- TODO: replace # with the repository URL -->
   </footer>
 
   <!-- Pyodide runtime (CONTRACT §8) -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
-  <!-- Plain scripts, no modules: effects (cosmetic layer, §10), then
-       renderer (uses Effects for blink/camera data), then app. -->
+  <!-- Plain scripts, no modules: the stroke font (§9, no game logic), then
+       effects (cosmetic layer, §10), then renderer (uses VectorFont for all
+       text and Effects for blink/camera data), then app. -->
+  <script src="vectorfont.js"></script>
   <script src="effects.js"></script>
   <script src="renderer.js"></script>
   <script src="app.js"></script>
+
+  <script>
+    // Header canvas (§8): LUNAR LANDER in the stroke font with the game's
+    // actual lander polylines (§9 body shape, y-up) as the glyph beside it,
+    // tagline beneath — the same beam-and-glow look as the tube. Painted
+    // exactly once; nothing here animates.
+    (() => {
+      const canvas = document.getElementById("header");
+      const ctx = canvas.getContext("2d");
+      const TITLE = "LUNAR LANDER";
+      const TAGLINE =
+        "A CLASSIC 1979 ARCADE — REBUILT AS A REINFORCEMENT-LEARNING ARENA";
+
+      // The §9 lander polylines, exactly as renderer.js draws them.
+      const LANDER = [
+        [[-6, 2], [-6, 9], [-3, 13], [3, 13], [6, 9], [6, 2], [-6, 2]], // cabin
+        [[-8, 2], [8, 2]],                                             // base
+        [[-4, 2], [-2, -3], [2, -3], [4, 2]],                          // nozzle
+        [[-6, 2], [-12, -10]],                                         // left leg
+        [[6, 2], [12, -10]],                                           // right leg
+        [[-15, -10], [-9, -10]],                                       // left foot
+        [[9, -10], [15, -10]],                                         // right foot
+      ];
+
+      ctx.strokeStyle = "#fff";
+      ctx.shadowColor = "#fff";
+      ctx.shadowBlur = 6; // §9 glow
+
+      // Layout: [lander glyph] + gap + [title], centered as one group.
+      const size = 80;                  // title cap height
+      const titleW = VectorFont.measure(TITLE, size);
+      const s = 3.2;                    // lander scale: 30 units -> 96px wide
+      const glyphW = 30 * s;
+      const gap = 34;
+      const x0 = (canvas.width - (glyphW + gap + titleW)) / 2;
+      const base = 100;                 // title baseline (caps span y 20..100)
+
+      // Lander, centered on the title caps. Body frame is y-up (§1).
+      ctx.save();
+      ctx.translate(x0 + glyphW / 2, base - size / 2 + 1.5 * s);
+      ctx.scale(s, -s);
+      ctx.lineWidth = 1.6 / s;
+      for (const poly of LANDER) {
+        ctx.beginPath();
+        ctx.moveTo(poly[0][0], poly[0][1]);
+        for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      VectorFont.draw(ctx, TITLE, x0 + glyphW + gap, base, size);
+
+      // Tagline: dimmer beam, softer glow.
+      ctx.strokeStyle = "#999";
+      ctx.shadowBlur = 3;
+      VectorFont.draw(ctx, TAGLINE, canvas.width / 2, 152, 18,
+                      { align: "center" });
+    })();
+  </script>
 </body>
 </html>

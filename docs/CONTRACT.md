@@ -7,8 +7,9 @@ against this file. If you must deviate, update this file in the same change.
 All constants referenced here live in `src/moonlander/config.py` (class `Config`).
 v2 changes vs v1: 2000×750 world, 5 pads, **multi-lander** (`landers[]` schema,
 solid collisions), config-relative observations, sensor models (full/radar),
-euclidean pad targeting. This revision adds difficulty presets (§2/§3/§8) and
-bumps the wheel to **0.3.0**.
+euclidean pad targeting. Difficulty presets came in 0.3.0. The current revision
+(**0.4.0**) adds terrain macro-variation (§3) and the vector stroke font +
+docs page on the web side (§8/§9).
 
 ## 1. Coordinate conventions
 
@@ -68,6 +69,16 @@ obs          = g.obs(i=0)              # list of 14 floats for lander i (§6)
 
 - Vertices evenly spaced in x across `[0, world_w]`; midpoint displacement
   (`terrain_*` config), clamped to `[terrain_y_min, terrain_y_max]`.
+- **Macro-variation** (so seeds don't look samey): per episode, on top of the
+  preset's base roughness — (a) endpoint heights drawn from the widened range
+  `[terrain_y_min + 20, terrain_y_max - 60]` (not the old fixed `[120, 300]`);
+  (b) the world is split into 3–5 random zones, each scaling displacement
+  amplitude by an independent factor `U[0.6, 1.5]` (flat valleys next to violent
+  ridges); (c) pads are placed by seeded rejection sampling uniformly across the
+  world (≥ `pad_margin` from edges and each other) instead of evenly-spaced
+  slots — clusters and large empty stretches are allowed and desirable.
+  ALL variation flows through the episode RNG: same preset + seed remains
+  byte-identical. Spawn placement keeps its slot + min-separation scheme.
 - **Difficulty presets** (exact values; `Config` class defaults == CADET):
 
   | preset    | displacement | decay | y_max | pad widths 2X/3X/5X | fuel | spawn vx |
@@ -190,7 +201,9 @@ continuous when the nearest pad switches).
 - **Training note (audit-verified):** at k=1 a good landing is ~1300+ decisions, so
   with γ=0.99 the terminal reward is discounted to ~0.0002 and *hovering beats
   landing* in discounted return. Train with `frame_skip=4` and `gamma >= 0.997`
-  (0.999 recommended). frame_skip up to 8 preserves 100% autopilot landability.
+  (0.999 recommended). frame_skip up to 8 preserves the autopilot landing rate
+  (within one seed of k=1 on cadet seeds 0..29 — 29/30 on the 0.4.0
+  macro-variation terrain; the old "100%" claim predates it).
 - Registered as **`MoonLander-v0`** via a guarded `gymnasium.register` in
   `moonlander/__init__.py` (`try/except ImportError` so the browser, which has no
   gymnasium, imports cleanly; `entry_point="moonlander.env:MoonLanderEnv"`).
@@ -218,10 +231,11 @@ continuous when the nearest pad switches).
 ## 8. Web frontend
 
 Files: `web/index.html`, `web/app.js`, `web/renderer.js`, `web/effects.js`,
-wheel at `web/assets/moonlander-0.3.0-py3-none-any.whl` (version matches pyproject).
+`web/vectorfont.js` (stroke font, §9), `web/docs.html` (documentation page),
+wheel at `web/assets/moonlander-0.4.0-py3-none-any.whl` (version matches pyproject).
 
 **Boot** (as v1): pyodide v0.26.4 from jsdelivr, `loadPackage("micropip")`,
-`micropip.install(new URL("assets/moonlander-0.3.0-py3-none-any.whl", location.href).href)`,
+`micropip.install(new URL("assets/moonlander-0.4.0-py3-none-any.whl", location.href).href)`,
 no numpy. Boot errors render on canvas.
 
 **App states**: `LOADING` → `TITLE` (attract: `Game(n_landers=3)` flown by
@@ -253,18 +267,37 @@ multi-touch works (rotate+thrust). `touch-action: none` on the canvas; in
 portrait orientation show a "ROTATE YOUR DEVICE" line. Any tap leaves TITLE/ENDED.
 
 **Page chrome** (retro presentation, §9 look): black page; header `LUNAR LANDER`
-in glowing vector-style lettering with a small lander glyph; one-line tagline
-under it (e.g. `A CLASSIC 1979 ARCADE — REBUILT AS A REINFORCEMENT-LEARNING ARENA`);
-footer with control legend and a GitHub link placeholder. Inline SVG favicon
-(white lander outline on black). OpenGraph/meta tags (title, description) for
-link sharing. No external fonts/assets beyond the pyodide CDN.
+**drawn with the vector stroke font on a header canvas** (no CSS-styled text for
+display lettering), with the game's actual lander polylines as the glyph beside
+it; one-line tagline under it; footer with control legend, a `DOCS` link to
+`docs.html`, and a GitHub link placeholder. Inline SVG favicon (white lander
+outline on black). OpenGraph/meta tags for link sharing. No external
+fonts/assets beyond the pyodide CDN.
+
+**Docs page** (`web/docs.html`): same theme (black, glow, vector-font headings
+via small canvases rendered by `vectorfont.js`; body text in plain monospace for
+readability). Standalone — no Pyodide. Content: what this is; play help
+(controls, landing rules, scoring, difficulty table from §3); RL documentation
+(obs table from §6 verbatim, action spaces, reward structure + the γ/frame_skip
+training note from §7, sensor modes, presets-as-curriculum, multi-lander API
+snippet, determinism/seed semantics incl. `?seed=` ↔ `game_seed` parity); a
+roadmap line (arena → competition → human co-op). Cross-links: game ↔ docs.
 
 ## 9. Renderer (vector-monitor look)
 
 - Canvas logical size = `world_w × world_h` (2000×750), CSS-scaled to fit width,
   aspect preserved. Black `#000`; white strokes `lineWidth ~1.5/cameraScale`;
-  glow `shadowBlur 6` white. HUD/banners/overlay in screen space, font sizes
-  scaled ~1.6× relative to v1 so they read at the wider canvas's CSS scale.
+  glow `shadowBlur 6` white. HUD/banners/overlay in screen space.
+- **All text is drawn with the vector stroke font** (`web/vectorfont.js`) — zero
+  `fillText` anywhere. The font: single-stroke polyline glyphs in a normalized
+  cell, uppercase `A–Z`, digits `0–9`, and the symbols actually used
+  (`space - — . , : ; / ( ) [ ] + × ? ! ' " % = > _ ↑ ↓ ← →`). Letterforms are
+  angular Atari-vector style: straight segments and chamfered (octagonal)
+  corners, NO curves; consistent stroke weight; drawn with the same glow stroke
+  as the rest of the scene. API: `VectorFont.draw(ctx, text, x, y, size, {align,
+  weight})` and `VectorFont.measure(text, size)`. Missing glyphs render as a
+  hollow box (never throw). HUD rows, banners, title, menu, overlay, pad labels
+  (`"2X"`), seed/preset readouts — all stroke-font.
 - Terrain polyline, pads (brighter double stroke + `"2X"` labels below), stars: as v1.
 - **All landers** in `landers[]` are drawn (same §9-v1 polyline shape, per-lander
   flame); a crashed lander is hidden once its explosion has been spawned; a landed
