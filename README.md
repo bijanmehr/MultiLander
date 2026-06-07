@@ -116,7 +116,7 @@ same episode, byte-for-byte, in CI, in training, and in your browser.
 
 Already wired: `.github/workflows/pages.yml` tests, builds the wheel, and
 publishes `web/` on every push to `main` (Pages source: GitHub Actions).
-Live at **https://bijanmehr.github.io/multi-lander/** — embed it anywhere
+Live at **https://bijanmehr.github.io/MultiLander/** — embed it anywhere
 with an `<iframe>`.
 The site ships two pages: the game, and `docs.html` — a same-theme mini-manual
 covering the controls, scoring, and the full RL interface.
