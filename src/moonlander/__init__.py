@@ -7,7 +7,7 @@ Python side — never import it at package top level; the registration below
 references it lazily via an entry-point string (CONTRACT §7).
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 try:
     import gymnasium as _gymnasium

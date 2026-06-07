@@ -241,10 +241,10 @@ continuous when the nearest pad switches).
 
 Files: `web/index.html`, `web/app.js`, `web/renderer.js`, `web/effects.js`,
 `web/vectorfont.js` (stroke font, §9), `web/docs.html` (documentation page),
-wheel at `web/assets/moonlander-0.4.0-py3-none-any.whl` (version matches pyproject).
+wheel at `web/assets/moonlander-0.5.0-py3-none-any.whl` (version matches pyproject).
 
 **Boot** (as v1): pyodide v0.26.4 from jsdelivr, `loadPackage("micropip")`,
-`micropip.install(new URL("assets/moonlander-0.4.0-py3-none-any.whl", location.href).href)`,
+`micropip.install(new URL("assets/moonlander-0.5.0-py3-none-any.whl", location.href).href)`,
 no numpy. Boot errors render on canvas.
 
 **App states**: `LOADING` → `TITLE` (attract: `Game(n_landers=3)` flown by
