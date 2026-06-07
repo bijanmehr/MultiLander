@@ -17,6 +17,8 @@
  *     seed:          number|null (?seed=N badge for human episodes, §8),
  *     preset:        "trainee" | "cadet" | "commander" (difficulty, §8),
  *     overlay:       boolean  (agent-view obs panel toggle),
+ *     aiPilot:       boolean  (AI PILOT engaged — §8 indicator + title hint),
+ *     notice:        boolean  (transient NO POLICY notice — §8),
  *     attract:       boolean  (attract-mode episode -> title text over REVEAL),
  *     camera:        {s, cx, cy} world camera from Effects (§10),
  *     reveal:        {points, starAlpha, padsOn} partial scene or null (§10),
@@ -297,6 +299,25 @@ const Renderer = (() => {
     VectorFont.draw(ctx, `SEED ${seed}`, 40, H - 22, 18, { align: "left" });
   }
 
+  // §8 AI PILOT indicator: blinking under the left HUD block while the
+  // trained policy flies — unmistakably "the machine has the stick".
+  function drawAiPilot() {
+    glow(true);
+    ctx.strokeStyle = "#fff";
+    if (Effects.blink()) {
+      VectorFont.draw(ctx, "AI PILOT", 40, 212, 20, { align: "left" });
+    }
+  }
+
+  // §8 transient notice: P/AI pressed but no policy.json artifact exists.
+  function drawNotice() {
+    glow(true);
+    ctx.strokeStyle = "#fff";
+    centeredText("NO POLICY", 600, 28);
+    ctx.strokeStyle = "#999";
+    centeredText("TRAIN ONE:  PYTHON -M MOONLANDER.TRAIN_CEM", 642, 16);
+  }
+
   // ------------------------------------------------------ agent-view overlay
 
   // Labels for the 14 observation values, in CONTRACT §6 order.
@@ -412,7 +433,7 @@ const Renderer = (() => {
     ctx.strokeStyle = "#fff";
   }
 
-  function drawTitle(preset) {
+  function drawTitle(preset, aiPilot) {
     // Dim the attract action behind the title text.
     glow(false);
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
@@ -422,9 +443,13 @@ const Renderer = (() => {
     centeredText("LUNAR LANDER", 290, 80); // §9: title lettering ~80px caps
     if (Effects.blink()) centeredText("PRESS ANY KEY", 380, 26);
     drawPresetMenu(preset, 450);
+    if (aiPilot) {
+      // §8: armed on the title — the next episode starts with the policy flying.
+      centeredText("AI PILOT ARMED", 496, 16);
+    }
     // Cabinet-style copyright line, the way 1979 did it.
     ctx.strokeStyle = "#777";
-    centeredText("(C) 2026 BIJAN MEHR", 530, 15);
+    centeredText("(C) 2026 BIJAN MEHR", 538, 15);
     ctx.strokeStyle = "#fff";
   }
 
@@ -462,12 +487,12 @@ const Renderer = (() => {
 
       case "TITLE":
         if (view.terrain && view.frame) drawScene(view);
-        drawTitle(view.preset);
+        drawTitle(view.preset, view.aiPilot);
         break;
 
       case "REVEAL":
         if (view.terrain && view.frame) drawScene(view);
-        if (view.attract) drawTitle(view.preset); // attract draw-in stays under the title
+        if (view.attract) drawTitle(view.preset, view.aiPilot); // attract draw-in stays under the title
         break;
 
       case "FLYING":
@@ -475,6 +500,7 @@ const Renderer = (() => {
         drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
+        if (view.aiPilot) drawAiPilot();
         break;
 
       case "ENDED":
@@ -482,9 +508,14 @@ const Renderer = (() => {
         drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
+        if (view.aiPilot) drawAiPilot();
         // Banner describes lander 0 (§9), ~0.8 s after a crash (§10).
         if (view.showBanner) drawOutcomeBanner(view.frame.landers[0].outcome);
         break;
+    }
+    if (view.notice && (view.state === "TITLE" || view.state === "FLYING" ||
+                        view.state === "ENDED")) {
+      drawNotice(); // §8: NO POLICY, ~2 s
     }
   }
 

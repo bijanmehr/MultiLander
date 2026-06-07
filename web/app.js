@@ -21,6 +21,7 @@
   const ATTRACT_LANDERS = 3;   // §8: attract flies three autopilots
   const HUMAN_LANDERS = 1;     // §8: human episodes are single-lander
   const PRESETS = ["trainee", "cadet", "commander"]; // §2/§8 difficulty ladder
+  const NOTICE_TIME = 2.0;     // §8: NO POLICY notice duration, seconds
 
   // App states (§8/§10): LOADING -> REVEAL/TITLE (attract) -> on any key
   // REVEAL -> FLYING -> ENDED -> REVEAL ... (ERROR on boot failure).
@@ -38,6 +39,9 @@
   let highScore = loadHigh(); // best single-episode points (localStorage, §8)
   let overlay = false;     // agent-view obs panel toggle
   let preset = loadPreset(); // §8 difficulty preset (localStorage, default cadet)
+  let aiPilot = false;     // §8/§11: AI PILOT — the trained policy flies lander 0
+  let policyJson = null;   // raw §11 policy.json string fetched at boot, or null
+  let notice = 0;          // seconds left on the NO POLICY notice
 
   let attract = true;      // current episode flown by step_auto_all() (§8 attract)?
   let revealNext = "TITLE"; // state once the REVEAL draw-in completes (§10)
@@ -111,6 +115,22 @@
       if (state === "TITLE" || state === "ENDED") {
         selectPreset(PRESETS[Number(code.slice(-1)) - 1]);
       }
+      return;
+    }
+    // §8 take-over: while AI PILOT flies, a fresh rotate/thrust PRESS hands
+    // control straight back to the human — keydown already added the code to
+    // `keys`, so the same tick that disengages also steers. Held keys from
+    // before the toggle don't disengage (this is edge-triggered).
+    if (state === "FLYING" && aiPilot &&
+        (ROTATE_LEFT.includes(code) || ROTATE_RIGHT.includes(code) ||
+         THRUST.includes(code))) {
+      aiPilot = false;
+      return;
+    }
+    // §8 AI PILOT toggle: P in TITLE/FLYING/ENDED (REVEAL returned above).
+    // Like the digits, P NEVER counts as "any key".
+    if (code === "KeyP") {
+      toggleAiPilot();
       return;
     }
     if (state === "TITLE" && !MODIFIERS.includes(code)) {
@@ -189,7 +209,7 @@
   }
 
   function bindButton(el) {
-    const code = el.dataset.code; // BtnLeft | BtnRight | BtnThrust | BtnObs
+    const code = el.dataset.code; // BtnLeft | BtnRight | BtnThrust | BtnObs | BtnAi
     const pointers = new Set();   // this button's active pointerIds
     touchButtons.push({ el, pointers });
 
@@ -208,7 +228,16 @@
         }
         return;
       }
+      if (code === "BtnAi") {
+        // §8 AI = touch parity with KeyP, same gating as the keyboard path
+        // (no LOADING/ERROR/REVEAL) — and never "any key".
+        if (state !== "LOADING" && state !== "ERROR" && state !== "REVEAL") {
+          toggleAiPilot();
+        }
+        return;
+      }
       keys.add(code); // same held-input set the keyboard uses (§8)
+      if (state === "FLYING" && aiPilot) aiPilot = false; // §8 take-over (touch)
       // §8: arcade-button taps count as "any key" — a thumb already resting
       // on THRUST when the episode starts behaves like held Space.
       if (state === "TITLE" || state === "ENDED") startEpisode(false);
@@ -255,6 +284,7 @@
     paint("label-right", "→", 40);
     paint("label-thrust", "THRUST", 36);
     paint("label-obs", "OBS", 26);
+    paint("label-ai", "AI", 26);
   }
 
   // --------------------------------------------------------- python boundary
@@ -276,6 +306,17 @@
     game = py.globals.get("game");
     gameLanders = nLanders;
     gamePreset = preset;
+    if (policyJson) {
+      // §11: re-attach the policy to every (re)built Game — AI PILOT must
+      // survive preset changes and attract<->human rebuilds. Weights cross
+      // the boundary as a JSON string, once per Game (§2).
+      try {
+        py.globals.set("policy_json", policyJson);
+        py.runPython("game.set_policy(policy_json)");
+      } catch (_) {
+        policyJson = null; // corrupt artifact -> AI PILOT unavailable (§8)
+      }
+    }
   }
 
   // §8 difficulty change (TITLE/ENDED only — handleKeyPress gates states).
@@ -291,6 +332,16 @@
     preset = name;
     savePreset(name);
     if (state === "TITLE") startEpisode(true);
+  }
+
+  // §8/§11: toggle the trained-policy pilot. With no policy artifact (fetch
+  // failed / not trained yet) show the transient NO POLICY notice instead.
+  function toggleAiPilot() {
+    if (!policyJson) {
+      notice = NOTICE_TIME;
+      return;
+    }
+    aiPilot = !aiPilot;
   }
 
   // Fresh episode (human or attract): reset Python, restart the cosmetic
@@ -330,15 +381,21 @@
   // One fixed 1/60 s tick: step Python per state, then advance cosmetics.
   function tick() {
     if (state === "LOADING" || state === "ERROR") return;
+    if (notice > 0) notice -= DT; // §8: NO POLICY notice countdown
 
     if (state === "FLYING") {
-      // Read held inputs (keys + arcade buttons), step Python, parse the frame.
-      const left = ROTATE_LEFT.some((k) => keys.has(k));
-      const right = ROTATE_RIGHT.some((k) => keys.has(k));
-      const rotate = (left ? 1 : 0) - (right ? 1 : 0); // +1 CCW / tilt left (§2)
-      const thrust = THRUST.some((k) => keys.has(k));
-
-      frame = JSON.parse(game.step(rotate, thrust)); // n_landers == 1 (§2)
+      if (aiPilot && policyJson) {
+        // §8/§11 AI PILOT: the trained policy flies lander 0 inside Python —
+        // JS never even sees the action, only the resulting frame.
+        frame = JSON.parse(game.step_policy());
+      } else {
+        // Read held inputs (keys + arcade buttons), step Python, parse the frame.
+        const left = ROTATE_LEFT.some((k) => keys.has(k));
+        const right = ROTATE_RIGHT.some((k) => keys.has(k));
+        const rotate = (left ? 1 : 0) - (right ? 1 : 0); // +1 CCW / tilt left (§2)
+        const thrust = THRUST.some((k) => keys.has(k));
+        frame = JSON.parse(game.step(rotate, thrust)); // n_landers == 1 (§2)
+      }
       trackExplosions();
 
       if (frame.status !== "flying") { // §4: "done" — all landers terminal
@@ -451,6 +508,8 @@
       seed: attract ? null : urlSeed, // §8: "SEED N" badge on human episodes
       preset,                         // §8: title menu + HUD readout
       overlay,
+      aiPilot,                        // §8: AI PILOT indicator + title hint
+      notice: notice > 0,             // §8: transient NO POLICY notice
       attract,
       camera: Effects.cameraView(),
       reveal: Effects.revealView(), // null unless the draw-in is running
@@ -476,6 +535,16 @@
       await micropip.install(
         new URL("assets/moonlander-0.5.0-py3-none-any.whl", location.href).href
       );
+
+      stage = "FETCHING POLICY";
+      try {
+        // §8/§11: the trained-policy artifact is optional — without it the
+        // game is fully playable and AI PILOT just reports NO POLICY.
+        const resp = await fetch(
+          new URL("assets/policy.json", location.href).href
+        );
+        if (resp.ok) policyJson = await resp.text();
+      } catch (_) { /* file:// or missing artifact — AI PILOT unavailable */ }
 
       stage = "CREATING GAME";
       py.runPython("from moonlander.core.game import Game");

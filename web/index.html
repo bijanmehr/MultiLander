@@ -149,11 +149,17 @@
       right: calc(14px + env(safe-area-inset-right, 0px));
       top: calc(14px + env(safe-area-inset-top, 0px));
     }
+    #btn-ai {
+      width: 84px;
+      height: 48px;
+      right: calc(112px + env(safe-area-inset-right, 0px));
+      top: calc(14px + env(safe-area-inset-top, 0px));
+    }
     /* Label canvases are drawn at 2x logical size and downscaled by CSS so
        the stroke-font beam stays crisp on high-DPI screens. */
     #btn-left canvas, #btn-right canvas { width: 36px; height: 36px; }
     #btn-thrust canvas { width: 120px; height: 32px; }
-    #btn-obs canvas { width: 55px; height: 22px; }
+    #btn-obs canvas, #btn-ai canvas { width: 55px; height: 22px; }
 
     /* §8: portrait phones get a rotate hint above the (very short) canvas. */
     #rotate-hint { display: none; }
@@ -216,11 +222,15 @@
     <div class="abtn" id="btn-obs" data-code="BtnObs">
       <canvas id="label-obs" width="110" height="44"></canvas>
     </div>
+    <div class="abtn" id="btn-ai" data-code="BtnAi">
+      <canvas id="label-ai" width="110" height="44"></canvas>
+    </div>
   </div>
 
   <footer>
-    &larr;/A &rarr;/D rotate &nbsp;&middot;&nbsp; &uarr;/W/space thrust &nbsp;&middot;&nbsp; 1/2/3 difficulty &nbsp;&middot;&nbsp; R new episode &nbsp;&middot;&nbsp; O agent view
+    &larr;/A &rarr;/D rotate &nbsp;&middot;&nbsp; &uarr;/W/space thrust &nbsp;&middot;&nbsp; 1/2/3 difficulty &nbsp;&middot;&nbsp; R new episode &nbsp;&middot;&nbsp; O agent view &nbsp;&middot;&nbsp; P AI pilot
     &nbsp;&middot;&nbsp; <a href="docs.html">DOCS</a>
+    &nbsp;&middot;&nbsp; <a href="ml.html">THE MACHINERY</a>
     &nbsp;&middot;&nbsp; <a href="https://github.com/bijanmehr/MultiLander">GITHUB</a>
     &nbsp;&middot;&nbsp; <span style="color:#666">by <a href="https://github.com/bijanmehr">bijan mehr</a></span>
   </footer>

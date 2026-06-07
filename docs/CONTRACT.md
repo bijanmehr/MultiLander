@@ -241,11 +241,16 @@ continuous when the nearest pad switches).
 
 Files: `web/index.html`, `web/app.js`, `web/renderer.js`, `web/effects.js`,
 `web/vectorfont.js` (stroke font, §9), `web/docs.html` (documentation page),
-wheel at `web/assets/moonlander-0.5.0-py3-none-any.whl` (version matches pyproject).
+`web/ml.html` (machinery page, §11), trained-policy artifact at
+`web/assets/policy.json` (§11, committed), wheel at
+`web/assets/moonlander-0.5.0-py3-none-any.whl` (version matches pyproject).
 
 **Boot** (as v1): pyodide v0.26.4 from jsdelivr, `loadPackage("micropip")`,
 `micropip.install(new URL("assets/moonlander-0.5.0-py3-none-any.whl", location.href).href)`,
-no numpy. Boot errors render on canvas.
+no numpy. Boot errors render on canvas. Then `fetch("assets/policy.json")` —
+optional: on failure AI PILOT is unavailable and the game is unaffected. The
+raw string is passed to `game.set_policy` on every Game (re)build, so the
+mode survives preset changes and attract↔human rebuilds.
 
 **App states**: `LOADING` → `TITLE` (attract: `Game(n_landers=3)` flown by
 `step_auto_all()`; collisions welcome) → `REVEAL` → `FLYING` (human:
@@ -258,8 +263,18 @@ flies the same terrain; attract still uses fresh seeds). Invalid/absent → entr
 **High score**: best single-episode points in `localStorage["moonlander.high"]`,
 shown in the HUD line as `HIGH <n>` under SCORE, updated when beaten.
 
-**Keys** (unchanged): `←→/AD` rotate · `↑/W/Space` thrust · `R` new episode ·
-`O` agent-view overlay (now 14 labeled values incl. PAD MULT, PAD VISIBLE).
+**Keys**: `←→/AD` rotate · `↑/W/Space` thrust · `R` new episode ·
+`O` agent-view overlay (14 labeled values incl. PAD MULT, PAD VISIBLE) ·
+`P` AI PILOT toggle (TITLE/FLYING/ENDED, never "any key"; ignored in REVEAL).
+
+**AI PILOT** (§11): while engaged, FLYING ticks call `step_policy()` instead of
+`step(rotate, thrust)`; a blinking `AI PILOT` readout sits under the left HUD
+block, and the title screen shows `AI PILOT ARMED`. The mode persists across
+episodes and preset changes. **Take-over:** while the policy flies, a FRESH
+rotate/thrust press (keydown / arcade-button pointerdown — edge-triggered, held
+inputs from before don't count) instantly disengages back to human control.
+With no policy artifact, `P`/`AI` show a transient `NO POLICY` notice (~2 s)
+instead. Attract mode always uses the scripted autopilot, never the policy.
 
 **Difficulty select**: keys `1`/`2`/`3` (TRAINEE/CADET/COMMANDER) accepted in
 TITLE and ENDED only (never mid-flight). Selection persists in
@@ -286,6 +301,8 @@ the three options with the active one highlighted. `1`/`2`/`3` do NOT count as
   tapping the persistent preset readout cycles trainee→cadet→commander.
 - **Agent-view button (touch parity with O)**: a small chamfered `OBS` toggle,
   top-right, coarse-pointer only.
+- **AI button (touch parity with P)**: a small chamfered `AI` toggle, top-right
+  beside OBS, coarse-pointer only — same gating as the key, never "any key".
 - Tap routing in TITLE/ENDED: taps on the preset menu/readout or `OBS` perform
   only their action; taps on the arcade buttons or bare canvas count as
   "any key" (a thumb already resting on THRUST when the episode starts behaves
