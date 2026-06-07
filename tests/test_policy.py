@@ -161,6 +161,19 @@ def test_set_policy_rejects_garbage():
         g.set_policy('{"format": "nope"}')
 
 
+def test_failed_set_policy_preserves_the_active_policy():
+    # Import-flow guarantee (§2): validation happens before assignment, so a
+    # rejected payload leaves the previously attached policy flying.
+    g = Game(mode="classic", preset="cadet")
+    g.set_policy(policy_json(b2=[0.0, 0.0, 0.0, 1.0]))  # always-thrust
+    g.reset(seed=11)
+    before = g.step_policy()
+    with pytest.raises(ValueError):
+        g.set_policy('{"format": "nope"}')
+    after = g.step_policy()  # still flying on the old policy, no RuntimeError
+    assert json.loads(after)["t"] > json.loads(before)["t"]
+
+
 def test_policy_survives_reset():
     # §2: set once, fly many episodes (the web binge-watch path).
     g = Game(mode="classic")
