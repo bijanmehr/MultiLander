@@ -25,6 +25,7 @@ runs live in visitors' browsers.
 | Multi-lander (v2) | **Solid**: flying-flying contact crashes both; flying-landed crashes the flyer (pad-blocking is legal strategy) | user choice — collision-on-contact is simple (no resolution physics) and enables adversarial play |
 | Comms (future) | Message channel lives in the PettingZoo wrapper, zero core changes; pairs with radar PO (private info makes messages worth sending) | emergent-communication research needs PO to matter |
 | Training | SB3 PPO (next phase), weights exported for in-browser inference | |
+| First learned pilot (0.5.0) | CEM over a 308-param MLP; pure-stdlib forward pass in core; weights as JSON; best-probe checkpointing | simplest teachable baseline — no gradients, no γ (immune to the discount-horizon trap by construction); PPO stays phase 4 |
 
 ## Pre-training audit (2026-06-07)
 
@@ -76,7 +77,8 @@ boundary is a JSON string.
 
 4. PPO baseline (SB3, `frame_skip=4`, γ=0.999) + in-browser trained-agent showcase
    (numpy-free MLP forward pass, or replay-log playback — a full episode fits in
-   ~128 URL-safe bytes)
+   ~128 URL-safe bytes). *0.5.0 shipped the warm-up: CEM baseline + AI PILOT
+   mode (`P`) + ml.html — the numpy-free MLP path is now built and proven.*
 5. Algorithm arena: N policies side by side on identical seeds
 6. Multi-agent (PettingZoo): competition, pad-blocking, lidar/noise sensor models,
    message channels

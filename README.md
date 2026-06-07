@@ -45,7 +45,7 @@ share one world** — solid, collidable, each with its own fuel, score, and fate
 | 1 | Environment, physics, web visualization | ✅ done |
 | 2 | Retro animation layer: explosions, attract mode, arcade zoom | ✅ done |
 | 3 | Multi-lander world, sensor models (partial observability), GitHub Pages | ✅ this release |
-| 4 | PPO baseline (SB3), in-browser trained-agent showcase | next |
+| 4 | PPO baseline (SB3), in-browser trained-agent showcase | 🔶 CEM baseline shipped (`P` in the game) — PPO next |
 | 5 | **Algorithm arena** — train different algorithms, watch them fly side by side on identical seeds | planned |
 | 6 | **Competition** — multi-agent (PettingZoo), pad-blocking strategy, collision risk, comm channels for emergent cooperation | planned |
 | 7 | **Human + AI co-op** — you fly one lander, the agent flies the other, shared mission | the dream |
@@ -60,8 +60,8 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 ```
 
 **Controls** — `←`/`→` rotate · `↑`/`Space` thrust · `R` new terrain ·
-`O` agent view · `1`/`2`/`3` difficulty (TRAINEE / CADET / COMMANDER) ·
-touch zones on mobile. Land slow and upright; narrow pads pay 5X.
+`O` agent view · `P` AI pilot · `1`/`2`/`3` difficulty (TRAINEE / CADET /
+COMMANDER) · arcade buttons on mobile. Land slow and upright; narrow pads pay 5X.
 
 ## Training interface
 
@@ -94,6 +94,16 @@ g = Game(n_landers=3)                            # one world, three landers
 g.reset(seed=7)                                  # shared terrain, spread spawns
 g.step_all('[[1, true], [0, false], [-1, true]]')  # solid: collisions crash both
 ```
+
+The simplest learned pilot ships first: a 308-parameter MLP trained with the
+cross-entropy method — no gradients, no discount factor, numpy only:
+
+```bash
+.venv/bin/python -m moonlander.train_cem      # minutes → web/assets/policy.json
+```
+
+Press `P` in the web game to hand it the stick. Every moving part is explained
+at **[ml.html](https://bijanmehr.github.io/MultiLander/ml.html)**.
 
 ## Architecture (why this works in a browser)
 
