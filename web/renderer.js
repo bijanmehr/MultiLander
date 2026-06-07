@@ -394,6 +394,10 @@ const Renderer = (() => {
     centeredText("LUNAR LANDER", 290, 80); // §9: title lettering ~80px caps
     if (Effects.blink()) centeredText("PRESS ANY KEY", 380, 26);
     drawPresetMenu(preset, 450);
+    // Cabinet-style copyright line, the way 1979 did it.
+    ctx.strokeStyle = "#777";
+    centeredText("(C) 2026 BIJAN MEHR", 530, 15);
+    ctx.strokeStyle = "#fff";
   }
 
   function drawOutcomeBanner(outcome) {
