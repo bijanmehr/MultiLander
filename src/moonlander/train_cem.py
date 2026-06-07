@@ -94,6 +94,8 @@ def main(argv=None):
     ap.add_argument("--noise", type=float, default=0.02,
                     help="std floor added each generation (never stop exploring)")
     ap.add_argument("--seed", type=int, default=0, help="master seed for the whole run")
+    ap.add_argument("--probes", type=int, default=6,
+                    help="held-out episodes per generation used to pick the checkpoint")
     ap.add_argument("--preset", default="trainee", help="difficulty preset to train on")
     ap.add_argument("--eval-seeds", type=int, default=30,
                     help="final-eval episode count (game_seeds 0..n-1)")
@@ -104,6 +106,13 @@ def main(argv=None):
     env = MoonLanderEnv(preset=args.preset, frame_skip=4)
     n = n_params(args.hidden)
     mean, std = np.zeros(n), np.full(n, 1.0)
+
+    # Checkpoint: CEM's mean wanders — the FINAL generation is not necessarily
+    # the best one. Probe each generation's mean on fixed held-out seeds
+    # (disjoint from the 0..29 eval set, untouched by the master rng) and ship
+    # the best report card, not the last one.
+    best_mean, best_probe, best_gen = mean.copy(), -np.inf, 0
+    probe_seeds = range(1000, 1000 + args.probes)
 
     history = []
     for gen in range(1, args.gens + 1):
@@ -118,19 +127,25 @@ def main(argv=None):
         ])
         mean, std = cem_update(samples, fitnesses, args.elite)
         std += args.noise
+        probe = np.mean([episode_return(env, unflatten(mean, args.hidden), s)
+                         for s in probe_seeds])
+        if probe > best_probe:
+            best_probe, best_mean, best_gen = probe, mean.copy(), gen
         top = np.sort(fitnesses)[::-1]
         history.append({
             "gen": gen,
             "best": round(float(top[0]), 2),
             "elite_mean": round(float(top[:args.elite].mean()), 2),
             "pop_mean": round(float(fitnesses.mean()), 2),
+            "probe": round(float(probe), 2),
         })
         h = history[-1]
         print(f"gen {gen:3d}/{args.gens}  best {h['best']:9.2f}  "
-              f"elite {h['elite_mean']:9.2f}  pop {h['pop_mean']:9.2f}",
-              flush=True)
+              f"elite {h['elite_mean']:9.2f}  pop {h['pop_mean']:9.2f}  "
+              f"probe {h['probe']:9.2f}", flush=True)
 
-    parts = unflatten(mean, args.hidden)
+    print(f"checkpoint: gen {best_gen} (probe {best_probe:.2f})")
+    parts = unflatten(best_mean, args.hidden)
     landed, perfect = evaluate(env, parts, args.eval_seeds)
     print(f"eval: {landed}/{args.eval_seeds} landed ({perfect} perfect) on "
           f"{args.preset} game_seeds 0..{args.eval_seeds - 1}")
@@ -145,6 +160,8 @@ def main(argv=None):
             "preset": args.preset, "pop": args.pop, "elite": args.elite,
             "episodes": args.episodes, "gens": args.gens,
             "hidden": args.hidden, "noise": args.noise, "seed": args.seed,
+            "probes": args.probes,
+            "checkpoint": {"gen": best_gen, "probe": round(float(best_probe), 2)},
             "fitness_history": history,
             "eval": {"seeds": f"0..{args.eval_seeds - 1}",
                      "landed": landed, "perfect": perfect},
