@@ -107,27 +107,22 @@
 
     <canvas data-h="HOW TO FLY"></canvas>
     <ul>
-      <li><code>&larr;</code>/<code>A</code> and <code>&rarr;</code>/<code>D</code> — rotate (left key tilts the nose left)</li>
-      <li><code>&uarr;</code>/<code>W</code>/<code>Space</code> — main engine (burns fuel; at zero the engines are dead)</li>
-      <li><code>R</code> — new episode &nbsp;&middot;&nbsp; <code>O</code> — agent view (the 14 values a policy would see)</li>
-      <li><code>1</code>/<code>2</code>/<code>3</code> — difficulty (title and end screens only, never mid-flight)</li>
-      <li>Touch: left/right thirds rotate, bottom-center thrusts; multi-touch works</li>
-      <li><code>?seed=123</code> in the URL — every human episode uses that seed (put a whole classroom on the same terrain)</li>
+      <li><code>&larr;</code>/<code>A</code> <code>&rarr;</code>/<code>D</code> rotate
+        &nbsp;&middot;&nbsp; <code>&uarr;</code>/<code>W</code>/<code>Space</code> thrust
+        &nbsp;&middot;&nbsp; <code>R</code> new episode
+        &nbsp;&middot;&nbsp; <code>O</code> agent view
+        &nbsp;&middot;&nbsp; <code>1</code>/<code>2</code>/<code>3</code> difficulty</li>
+      <li>Touch: side thirds rotate, bottom-center thrusts
+        &nbsp;&middot;&nbsp; <code>?seed=123</code> in the URL pins the terrain</li>
     </ul>
     <p>
-      <strong>Landing:</strong> put both feet inside a pad, upright. Slow
-      enough (|vx| &le; 12 and |vy| &le; 18) is a <em>perfect</em> landing
-      worth 50 &times; the pad multiplier; a harder arrival (|vx| &le; 25,
-      |vy| &le; 35) still counts for 15 &times; the multiplier; anything
-      faster, tilted, or off the pad is a crash. Pads pay
-      <code>2X</code>/<code>3X</code>/<code>5X</code> — narrower pads pay
-      more. Flying off either side or above the world is a crash.
-    </p>
-    <p>
-      <strong>Company:</strong> landers are solid. Two flying landers that
-      meet crash both; flying into a lander that has already landed crashes
-      you and leaves it (and its banked points) untouched — blocking a pad
-      is legal strategy.
+      <strong>Landing:</strong> both feet on a pad, upright, slow —
+      |vx| &le; 12 and |vy| &le; 18 is a <em>perfect</em> landing
+      (50 &times; multiplier); up to 25/35 still pays 15 &times;; anything
+      else — fast, tilted, off-pad, off-world — is a crash. Narrower pads pay
+      more (<code>2X</code>/<code>3X</code>/<code>5X</code>). Landers are
+      solid: meet one in flight and you both crash; a landed lander blocks
+      its pad, legally.
     </p>
 
     <canvas data-h="DIFFICULTY"></canvas>
@@ -266,6 +261,19 @@ g.step_all('[[1, true], [0, false], [-1, true]]')  # solid: collisions crash bot
       <strong>competition</strong> (multi-agent, pad-blocking strategy,
       collision risk, comm channels) &rarr; <strong>human + AI co-op</strong>
       (you fly one lander, the agent flies the other).
+    </p>
+
+    <canvas data-h="ABOUT"></canvas>
+    <p>
+      MultiLander is built and maintained by
+      <a href="https://github.com/bijanmehr">Bijan Mehralizadeh</a> as an
+      open-source playground for teaching and researching reinforcement
+      learning — an homage to Atari's 1979 vector-monitor original, rebuilt
+      so the same physics that trains agents flies in your browser. Python +
+      Gymnasium on the inside; Pyodide/WebAssembly and a hand-drawn vector
+      stroke font on the outside. Source, tests, and the full Python&#8646;JS
+      contract live at
+      <a href="https://github.com/bijanmehr/MultiLander">github.com/bijanmehr/MultiLander</a>.
     </p>
 
     <a class="back" href="index.html">&larr; BACK TO THE GAME</a>
