@@ -60,7 +60,8 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 ```
 
 **Controls** — `←`/`→` rotate · `↑`/`Space` thrust · `R` new terrain ·
-`O` agent view · touch zones on mobile. Land slow and upright; narrow pads pay 5X.
+`O` agent view · `1`/`2`/`3` difficulty (TRAINEE / CADET / COMMANDER) ·
+touch zones on mobile. Land slow and upright; narrow pads pay 5X.
 
 ## Training interface
 
@@ -82,6 +83,9 @@ if term: print(info["outcome"])                  # {"kind": "perfect", "mult": 5
 - **Actions** `Discrete(4)` — noop / rotate-left / rotate-right / thrust.
 - **Reward** — potential-based shaping toward the pad (policy-invariant, continuous),
   small fuel cost, terminal +100·(multiplier bonus) / −100.
+- **Difficulty = curriculum** — `MoonLanderEnv(preset="trainee" | "cadet" | "commander")`:
+  rougher terrain, narrower pads, tighter fuel. Train up the same ladder the
+  web game's `1`/`2`/`3` keys select.
 - **Multi-lander core** (single-agent env wraps `n_landers=1`):
 
 ```python

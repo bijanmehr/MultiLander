@@ -33,7 +33,8 @@ class _Lander:
 class Game:
     """One multi-lander episode at a time. ``reset()`` starts a new one."""
 
-    def __init__(self, mode="classic", n_landers=1, obs_mode="full", config=None):
+    def __init__(self, mode="classic", n_landers=1, obs_mode="full", config=None,
+                 preset="cadet"):
         if mode not in ("classic", "gym"):
             raise ValueError(f"mode must be 'classic' or 'gym', got {mode!r}")
         if obs_mode not in ("full", "radar"):
@@ -44,7 +45,14 @@ class Game:
         self.mode = mode
         self.obs_mode = obs_mode
         self.n_landers = n_landers
-        self.cfg = config if config is not None else Config()
+        # CONTRACT §2: difficulty preset, an explicit config= wins over it.
+        # The active preset name is bookkeeping only — never in frame JSON.
+        if config is not None:
+            self.cfg = config
+            self.preset = None
+        else:
+            self.cfg = Config.preset(preset)
+            self.preset = preset
         self.reset()  # always hold a valid episode
 
     # ------------------------------------------------------------------ reset

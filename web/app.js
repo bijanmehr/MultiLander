@@ -20,6 +20,7 @@
   const CRASH_BANNER_DELAY = 0.8; // §10: outcome banner delay after a crash
   const ATTRACT_LANDERS = 3;   // §8: attract flies three autopilots
   const HUMAN_LANDERS = 1;     // §8: human episodes are single-lander
+  const PRESETS = ["trainee", "cadet", "commander"]; // §2/§8 difficulty ladder
 
   // App states (§8/§10): LOADING -> REVEAL/TITLE (attract) -> on any key
   // REVEAL -> FLYING -> ENDED -> REVEAL ... (ERROR on boot failure).
@@ -30,11 +31,13 @@
   let py = null;           // Pyodide handle (boot only constructs it once)
   let game = null;         // PyProxy game handle — the only PyProxy we keep
   let gameLanders = 0;     // n_landers of the current Game (attract 3 / human 1)
+  let gamePreset = null;   // preset of the current Game (rebuild on mismatch, §8)
   let terrain = null;      // parsed terrain JSON (§3), fixed per episode
   let frame = null;        // parsed frame JSON (§4), the last frame — drawn as-is
   let sessionScore = 0;    // accumulates lander 0's score across human episodes
   let highScore = loadHigh(); // best single-episode points (localStorage, §8)
   let overlay = false;     // agent-view obs panel toggle
+  let preset = loadPreset(); // §8 difficulty preset (localStorage, default cadet)
 
   let attract = true;      // current episode flown by step_auto_all() (§8 attract)?
   let revealNext = "TITLE"; // state once the REVEAL draw-in completes (§10)
@@ -99,6 +102,17 @@
       startEpisode(false); // fresh human episode any time
       return;
     }
+    // §8 difficulty select: 1/2/3 act in TITLE and ENDED ONLY, and a digit
+    // NEVER counts as "any key" — this branch must sit above the TITLE
+    // catch-all so a preset change keeps the player on the title screen.
+    // (FLYING/REVEAL digits fall in here too and are swallowed as no-ops,
+    // which is exactly the "never mid-flight" rule.)
+    if (code === "Digit1" || code === "Digit2" || code === "Digit3") {
+      if (state === "TITLE" || state === "ENDED") {
+        selectPreset(PRESETS[Number(code.slice(-1)) - 1]);
+      }
+      return;
+    }
     if (state === "TITLE" && !MODIFIERS.includes(code)) {
       startEpisode(false); // §10: any key starts a fresh human episode
       return;
@@ -154,18 +168,38 @@
 
   // --------------------------------------------------------- python boundary
 
-  // Ensure `game` is a Game with the right lander count. PROXY LIFECYCLE:
-  // switching attract (n=3) -> human (n=1) constructs a NEW Game. We
-  // explicitly destroy() the old PyProxy FIRST (we never hold two), then
-  // reassign the Python global — that reassignment drops Python's own last
-  // reference, so the old Game is freed immediately rather than waiting on
-  // the JS GC / FinalizationRegistry. `game` stays the single live PyProxy.
+  // Ensure `game` is a Game with the right lander count AND difficulty
+  // preset (§2/§8). PROXY LIFECYCLE: switching attract (n=3) -> human (n=1)
+  // or changing preset constructs a NEW Game. We explicitly destroy() the
+  // old PyProxy FIRST (we never hold two), then reassign the Python global —
+  // that reassignment drops Python's own last reference, so the old Game is
+  // freed immediately rather than waiting on the JS GC / FinalizationRegistry.
+  // `game` stays the single live PyProxy. `preset` is always one of PRESETS
+  // (loadPreset validates), so interpolating it into Python source is safe.
   function ensureGame(nLanders) {
-    if (game && gameLanders === nLanders) return;
+    if (game && gameLanders === nLanders && gamePreset === preset) return;
     if (game) game.destroy();
-    py.runPython(`game = Game(mode="classic", n_landers=${nLanders})`);
+    py.runPython(
+      `game = Game(mode="classic", n_landers=${nLanders}, preset="${preset}")`
+    );
     game = py.globals.get("game");
     gameLanders = nLanders;
+    gamePreset = preset;
+  }
+
+  // §8 difficulty change (TITLE/ENDED only — handleKeyPress gates states).
+  // Persist, then restart the current context: TITLE gets a fresh attract
+  // episode (startEpisode -> ensureGame rebuilds the Game with the new
+  // preset, new terrain, reveal draw-in); ENDED stays put — the final frame
+  // and outcome banner keep rendering from the already-parsed JSON, and the
+  // next episode (R / Space / tap) rebuilds through the same ensureGame
+  // check. Session score and high score are untouched (§8: one high score
+  // across presets).
+  function selectPreset(name) {
+    if (name === preset) return; // re-pressing the active preset: no-op
+    preset = name;
+    savePreset(name);
+    if (state === "TITLE") startEpisode(true);
   }
 
   // Fresh episode (human or attract): reset Python, restart the cosmetic
@@ -279,6 +313,25 @@
     } catch (_) { /* best-effort */ }
   }
 
+  // ----------------------------------------------------------------- preset
+
+  // §8: persisted difficulty preset, validated against the three names —
+  // anything else (tampered storage, old versions) falls back to "cadet".
+  function loadPreset() {
+    try {
+      const raw = localStorage.getItem("moonlander.preset");
+      return PRESETS.includes(raw) ? raw : "cadet";
+    } catch (_) {
+      return "cadet";
+    }
+  }
+
+  function savePreset(name) {
+    try {
+      localStorage.setItem("moonlander.preset", name);
+    } catch (_) { /* best-effort */ }
+  }
+
   // -------------------------------------------------------------- game loop
 
   // Fixed-timestep accumulator at 60 Hz over requestAnimationFrame (§8).
@@ -305,6 +358,7 @@
       sessionScore,
       high: highScore,
       seed: attract ? null : urlSeed, // §8: "SEED N" badge on human episodes
+      preset,                         // §8: title menu + HUD readout
       overlay,
       attract,
       camera: Effects.cameraView(),
@@ -329,7 +383,7 @@
       stage = "INSTALLING MOONLANDER WHEEL";
       const micropip = py.pyimport("micropip");
       await micropip.install(
-        new URL("assets/moonlander-0.2.0-py3-none-any.whl", location.href).href
+        new URL("assets/moonlander-0.3.0-py3-none-any.whl", location.href).href
       );
 
       stage = "CREATING GAME";

@@ -24,18 +24,42 @@ def fly_auto(game, seed):
     return frame_json
 
 
-def test_landing_rate_over_seeds_0_to_29():
-    # Margin below the measured rate (30/30 perfect on the v2 2000-wide world
-    # at time of writing) but comfortably above the contract's ~30% floor.
-    g = Game(mode="classic")
+def landing_kinds(preset):
+    """Outcome kinds for autopilot flights over seeds 0..29 on ``preset``."""
+    g = Game(mode="classic", preset=preset)
     kinds = []
     for seed in range(30):
         frame = json.loads(fly_auto(g, seed))
         assert frame["status"] != "flying", f"seed {seed}: episode never ended"
         kinds.append(frame["landers"][0]["outcome"]["kind"])
+    return kinds
+
+
+def test_landing_rate_over_seeds_0_to_29():
+    # Margin below the measured rate on the v0.3.0 CADET default (26/30
+    # perfect at time of writing — the rougher 210/0.62/480 terrain costs a
+    # few seeds vs the old flatter default's 30/30) but comfortably above
+    # the contract's ~30% floor.
+    kinds = landing_kinds("cadet")
     landed = sum(k in ("perfect", "hard") for k in kinds)
-    assert landed >= 12, f"only {landed}/30 landed: {kinds}"
+    assert landed >= 18, f"only {landed}/30 landed: {kinds}"
     assert kinds.count("perfect") >= 1, f"no perfect landing in 30 seeds: {kinds}"
+
+
+def test_trainee_preset_landing_rate_floor():
+    # TRAINEE is the easy rung of the curriculum: measured 29/30 perfect;
+    # floor at 25/30 keeps a safe margin without pinning exact behaviour.
+    kinds = landing_kinds("trainee")
+    landed = sum(k in ("perfect", "hard") for k in kinds)
+    assert landed >= 25, f"only {landed}/30 landed on trainee: {kinds}"
+
+
+def test_commander_preset_landing_rate_floor():
+    # COMMANDER is genuinely hard (measured 24/30) — the autopilot is NOT
+    # tuned for it. Loose floor only, to catch catastrophic regressions.
+    kinds = landing_kinds("commander")
+    landed = sum(k in ("perfect", "hard") for k in kinds)
+    assert landed >= 15, f"only {landed}/30 landed on commander: {kinds}"
 
 
 def test_step_auto_is_deterministic():

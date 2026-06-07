@@ -5,7 +5,7 @@ read from here. Values are gameplay-tuned, not physically exact. Pure stdlib —
 this module ships to the browser via Pyodide.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True)
@@ -46,11 +46,11 @@ class Config:
     # Terrain (midpoint displacement)
     terrain_points: int = 257  # 2^8 + 1 vertices across [0, world_w]
     terrain_y_min: float = 60.0
-    terrain_y_max: float = 420.0
+    terrain_y_max: float = 480.0
     terrain_init_lo: float = 120.0  # endpoint heights drawn uniform from [lo, hi]
     terrain_init_hi: float = 300.0
-    terrain_displacement: float = 180.0  # initial midpoint displacement amplitude
-    terrain_decay: float = 0.58  # amplitude multiplier per subdivision level
+    terrain_displacement: float = 210.0  # initial midpoint displacement amplitude
+    terrain_decay: float = 0.62  # amplitude multiplier per subdivision level
     n_stars: int = 100
 
     # Landing pads: one pad per multiplier listed (shuffled positions each episode)
@@ -71,3 +71,39 @@ class Config:
 
     # Episode
     max_steps: int = 2400  # Gymnasium truncation only (40 s); Game itself has no limit
+
+    @classmethod
+    def preset(cls, name):
+        """A Config for difficulty preset ``name`` (CONTRACT §3 table).
+
+        ``"trainee" | "cadet" | "commander"`` — class defaults == cadet.
+        Difficulty is terrain ruggedness, pad size, fuel budget and spawn
+        drift, never different physics. Unknown names raise ValueError.
+        """
+        if name not in PRESETS:
+            raise ValueError(
+                f"unknown preset {name!r} — options: {', '.join(PRESETS)}"
+            )
+        overrides = dict(PRESETS[name])
+        overrides["pad_widths"] = dict(overrides["pad_widths"])  # never share
+        return replace(cls(), **overrides)
+
+
+# Difficulty presets (CONTRACT §3, EXACT values; Config class defaults == CADET).
+PRESETS = {
+    "trainee": dict(
+        terrain_displacement=140.0, terrain_decay=0.52, terrain_y_max=380.0,
+        pad_widths={2: 130.0, 3: 95.0, 5: 60.0},
+        fuel_init=1200.0, spawn_vx_max=15.0,
+    ),
+    "cadet": dict(
+        terrain_displacement=210.0, terrain_decay=0.62, terrain_y_max=480.0,
+        pad_widths={2: 110.0, 3: 75.0, 5: 45.0},
+        fuel_init=1000.0, spawn_vx_max=25.0,
+    ),
+    "commander": dict(
+        terrain_displacement=260.0, terrain_decay=0.68, terrain_y_max=560.0,
+        pad_widths={2: 90.0, 3: 60.0, 5: 36.0},
+        fuel_init=850.0, spawn_vx_max=40.0,
+    ),
+}

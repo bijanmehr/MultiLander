@@ -7,7 +7,8 @@ against this file. If you must deviate, update this file in the same change.
 All constants referenced here live in `src/moonlander/config.py` (class `Config`).
 v2 changes vs v1: 2000×750 world, 5 pads, **multi-lander** (`landers[]` schema,
 solid collisions), config-relative observations, sensor models (full/radar),
-euclidean pad targeting, wheel version **0.2.0**.
+euclidean pad targeting. This revision adds difficulty presets (§2/§3/§8) and
+bumps the wheel to **0.3.0**.
 
 ## 1. Coordinate conventions
 
@@ -25,7 +26,7 @@ euclidean pad targeting, wheel version **0.2.0**.
 ```python
 from moonlander.core.game import Game
 
-g = Game(mode="classic", n_landers=1, obs_mode="full")
+g = Game(mode="classic", n_landers=1, obs_mode="full", preset="cadet")
 terrain_json = g.reset(seed=None)      # -> str (terrain JSON, §3)
 frame_json   = g.step(rotate, thrust)  # n_landers == 1 only (ValueError otherwise)
 frame_json   = g.step_all(controls_json)  # any n; one tick for ALL landers
@@ -36,6 +37,10 @@ obs          = g.obs(i=0)              # list of 14 floats for lander i (§6)
 ```
 
 - `mode`: `"classic"` (rotate+thrust) | `"gym"` (engines). `obs_mode`: `"full"` | `"radar"`.
+- `preset`: `"trainee" | "cadet" | "commander"` — difficulty presets defined in
+  `config.py` (`Config.preset(name)`); see table in §3. An explicit `config=`
+  overrides `preset`. Default `"cadet"`. Same preset + same seed = deterministic;
+  different presets produce different terrain for the same seed (by design).
 - `step(rotate, thrust, engine=0)`: classic — `rotate ∈ {-1,0,+1}` (+1 = CCW), `thrust: bool`,
   simultaneous allowed; gym — `step(0, False, engine)`, `engine ∈ {0,1,2,3}` (noop/left/main/right).
 - `step_all(controls_json)`: **JSON string** (everything crossing the boundary is a string):
@@ -63,12 +68,24 @@ obs          = g.obs(i=0)              # list of 14 floats for lander i (§6)
 
 - Vertices evenly spaced in x across `[0, world_w]`; midpoint displacement
   (`terrain_*` config), clamped to `[terrain_y_min, terrain_y_max]`.
+- **Difficulty presets** (exact values; `Config` class defaults == CADET):
+
+  | preset    | displacement | decay | y_max | pad widths 2X/3X/5X | fuel | spawn vx |
+  |-----------|-------------:|------:|------:|---------------------|-----:|---------:|
+  | trainee   | 140          | 0.52  | 380   | 130 / 95 / 60       | 1200 | ±15      |
+  | cadet     | 210          | 0.62  | 480   | 110 / 75 / 45       | 1000 | ±25      |
+  | commander | 260          | 0.68  | 560   | 90 / 60 / 36        | 850  | ±40      |
+
+  Everything not listed is identical across presets (gravity, thrust, landing
+  thresholds, scoring — difficulty is terrain ruggedness, pad size, fuel budget,
+  and spawn drift, NOT different physics).
 - Pads: one per entry in `pad_multipliers = (2, 2, 3, 3, 5)`, widths from
-  `pad_widths` (2X→110, 3X→75, 5X→45), random non-overlapping positions with
-  ≥ `pad_margin` gaps; covered vertices flattened to pad `y`.
+  `pad_widths` (per-preset — see the table above), random non-overlapping
+  positions with ≥ `pad_margin` gaps; covered vertices flattened to pad `y`.
 - Spawns: `n_landers` positions at `y = spawn_y`, x spread across
   `[spawn_x_min, spawn_x_max]` with ≥ `spawn_min_separation` between any two
-  (slot + jitter placement); each lander gets independent `vx ~ U[-25, 25]`.
+  (slot + jitter placement); each lander gets independent
+  `vx ~ U[-spawn_vx_max, +spawn_vx_max]` (±15 / ±25 / ±40 per the preset table).
 
 ## 4. Frame JSON (returned by every step call / `frame_json`)
 
@@ -162,9 +179,10 @@ continuous when the nearest pad switches).
 
 ## 7. Gymnasium env (`moonlander.env.MoonLanderEnv` — Python-side only)
 
-- `MoonLanderEnv(mode="classic", obs_mode="full", frame_skip=1, config=None)` —
-  single agent (wraps `Game(n_landers=1)`); the multi-agent PettingZoo wrapper is
-  a later phase.
+- `MoonLanderEnv(mode="classic", obs_mode="full", frame_skip=1, preset="cadet",
+  config=None)` — single agent (wraps `Game(n_landers=1)`); the multi-agent
+  PettingZoo wrapper is a later phase. `preset` as in §2 — the difficulty ladder
+  doubles as the RL curriculum (train trainee → cadet → commander).
 - `frame_skip=k`: each env step applies the action for k physics ticks (stopping
   early on terminal), sums per-tick fuel costs, and evaluates shaping across the
   whole env step. Truncation counts **ticks** (an episode is still `max_steps`
@@ -200,10 +218,10 @@ continuous when the nearest pad switches).
 ## 8. Web frontend
 
 Files: `web/index.html`, `web/app.js`, `web/renderer.js`, `web/effects.js`,
-wheel at `web/assets/moonlander-0.2.0-py3-none-any.whl` (version matches pyproject).
+wheel at `web/assets/moonlander-0.3.0-py3-none-any.whl` (version matches pyproject).
 
 **Boot** (as v1): pyodide v0.26.4 from jsdelivr, `loadPackage("micropip")`,
-`micropip.install(new URL("assets/moonlander-0.2.0-py3-none-any.whl", location.href).href)`,
+`micropip.install(new URL("assets/moonlander-0.3.0-py3-none-any.whl", location.href).href)`,
 no numpy. Boot errors render on canvas.
 
 **App states**: `LOADING` → `TITLE` (attract: `Game(n_landers=3)` flown by
@@ -219,6 +237,14 @@ shown in the HUD line as `HIGH <n>` under SCORE, updated when beaten.
 
 **Keys** (unchanged): `←→/AD` rotate · `↑/W/Space` thrust · `R` new episode ·
 `O` agent-view overlay (now 14 labeled values incl. PAD MULT, PAD VISIBLE).
+
+**Difficulty select**: keys `1`/`2`/`3` (TRAINEE/CADET/COMMANDER) accepted in
+TITLE and ENDED only (never mid-flight). Selection persists in
+`localStorage["moonlander.preset"]`, defaults to cadet, applies to BOTH human
+episodes and attract mode (rebuild the Python `Game` with the new preset), and
+is shown as a small `CADET`-style readout near the HUD. The TITLE screen lists
+the three options with the active one highlighted. `1`/`2`/`3` do NOT count as
+"any key" for leaving TITLE.
 
 **Touch controls** (pointer events; shown only on coarse-pointer devices):
 three translucent hold-zones — left third = rotate left, right third = rotate

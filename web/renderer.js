@@ -12,6 +12,7 @@
  *     sessionScore:  number   (session total, accumulated in app.js),
  *     high:          number   (best single-episode points, localStorage §8),
  *     seed:          number|null (?seed=N badge for human episodes, §8),
+ *     preset:        "trainee" | "cadet" | "commander" (difficulty, §8),
  *     overlay:       boolean  (agent-view obs panel toggle),
  *     attract:       boolean  (attract-mode episode -> title text over REVEAL),
  *     camera:        {s, cx, cy} world camera from Effects (§10),
@@ -245,7 +246,7 @@ const Renderer = (() => {
 
   // Screen-space, always the live frame values regardless of camera (§10).
   // hud reflects lander 0 (§4); FUEL comes from landers[0] likewise.
-  function drawHud(frame, sessionScore, high) {
+  function drawHud(frame, sessionScore, high, preset) {
     glow(true);
     ctx.fillStyle = "#fff";
     ctx.font = font(27); // ~1.6x v1's 17px (§9)
@@ -271,6 +272,14 @@ const Renderer = (() => {
     ctx.textAlign = "left";
     if (hud.hspeed !== 0) ctx.fillText(hud.hspeed > 0 ? "→" : "←", 1942, 94);
     if (hud.vspeed !== 0) ctx.fillText(hud.vspeed > 0 ? "↑" : "↓", 1942, 132);
+
+    // §8: small persistent difficulty readout under the right HUD block —
+    // dim like the seed badge so it reads as instrumentation, not score.
+    glow(false);
+    ctx.fillStyle = "#999";
+    ctx.font = font(20);
+    ctx.textAlign = "right";
+    ctx.fillText(String(preset || "").toUpperCase(), 1925, 170);
   }
 
   // Small "SEED N" badge in the bottom-left corner (§8 ?seed=N, human only).
@@ -358,8 +367,35 @@ const Renderer = (() => {
   }
 
   // Title layout (§10): big LUNAR LANDER + blinking PRESS ANY KEY over the
-  // attract gameplay. Screen space, untouched by the camera.
-  function drawTitle() {
+  // attract gameplay, plus the §8 difficulty menu. Screen space, untouched
+  // by the camera.
+  const PRESET_MENU = [
+    ["1 TRAINEE", "trainee"],
+    ["2 CADET", "cadet"],
+    ["3 COMMANDER", "commander"],
+  ];
+
+  // §8: the three presets on one centered line, the active one bracketed and
+  // full white, the others dimmed — vector-monitor style, brightness only.
+  function drawPresetMenu(preset, y) {
+    ctx.font = font(26);
+    ctx.textBaseline = "middle";
+    const sepW = ctx.measureText("   ").width;
+    const texts = PRESET_MENU.map(([label, name]) =>
+      name === preset ? `[ ${label} ]` : label
+    );
+    const widths = texts.map((t) => ctx.measureText(t).width);
+    let x = (W - widths.reduce((a, b) => a + b, 0) - 2 * sepW) / 2;
+    ctx.textAlign = "left";
+    for (let i = 0; i < texts.length; i++) {
+      ctx.fillStyle = PRESET_MENU[i][1] === preset ? "#fff" : "#888";
+      ctx.fillText(texts[i], x, y);
+      x += widths[i] + sepW;
+    }
+    ctx.fillStyle = "#fff";
+  }
+
+  function drawTitle(preset) {
     // Dim the attract action behind the title text.
     glow(false);
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
@@ -368,6 +404,7 @@ const Renderer = (() => {
     ctx.fillStyle = "#fff";
     centeredText("LUNAR LANDER", 290, 90);
     if (Effects.blink()) centeredText("PRESS ANY KEY", 380, 32);
+    drawPresetMenu(preset, 450);
   }
 
   function drawOutcomeBanner(outcome) {
@@ -404,24 +441,24 @@ const Renderer = (() => {
 
       case "TITLE":
         if (view.terrain && view.frame) drawScene(view);
-        drawTitle();
+        drawTitle(view.preset);
         break;
 
       case "REVEAL":
         if (view.terrain && view.frame) drawScene(view);
-        if (view.attract) drawTitle(); // attract draw-in stays under the title
+        if (view.attract) drawTitle(view.preset); // attract draw-in stays under the title
         break;
 
       case "FLYING":
         drawScene(view);
-        drawHud(view.frame, view.sessionScore, view.high);
+        drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
         break;
 
       case "ENDED":
         drawScene(view);
-        drawHud(view.frame, view.sessionScore, view.high);
+        drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
         // Banner describes lander 0 (§9), ~0.8 s after a crash (§10).

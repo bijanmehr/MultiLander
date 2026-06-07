@@ -12,7 +12,6 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .config import Config
 from .core.game import Game
 
 
@@ -26,16 +25,20 @@ class MoonLanderEnv(gym.Env):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, mode="classic", obs_mode="full", frame_skip=1, config=None):
+    def __init__(self, mode="classic", obs_mode="full", frame_skip=1,
+                 preset="cadet", config=None):
         super().__init__()
         frame_skip = int(frame_skip)
         if frame_skip < 1:
             raise ValueError(f"frame_skip must be >= 1, got {frame_skip}")
-        self.cfg = config if config is not None else Config()
         self.mode = mode
         self.obs_mode = obs_mode
         self.frame_skip = frame_skip
-        self.game = Game(mode=mode, n_landers=1, obs_mode=obs_mode, config=self.cfg)
+        # CONTRACT §7: preset as in §2 — the Game resolves it (explicit
+        # config= wins over preset), the env mirrors the resolved config.
+        self.game = Game(mode=mode, n_landers=1, obs_mode=obs_mode,
+                         config=config, preset=preset)
+        self.cfg = self.game.cfg
         self.action_space = spaces.Discrete(4)
         self.observation_space = spaces.Box(-10.0, 10.0, (14,), np.float32)
 
