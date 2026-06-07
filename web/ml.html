@@ -376,7 +376,9 @@ def act(self, obs):
           `Final eval: <span class="num">${ev.landed}/30</span> landed ` +
           `(<span class="num">${ev.perfect}</span> perfect) on TRAINEE ` +
           `seeds ${ev.seeds} — the scripted autopilot lands 30/30 there. ` +
-          `The network earned its landings; the autopilot was told how.`;
+          `The network earned its landings; the autopilot was told how. ` +
+          `Measured through the exact per-tick path your browser runs: ` +
+          `<code>?seed=N</code> reproduces these episodes, button for button.`;
       })
       .catch(() => {
         note.textContent =

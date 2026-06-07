@@ -17,6 +17,7 @@ import json
 
 import numpy as np
 
+from .core.game import Game
 from .env import MoonLanderEnv
 
 OBS_DIM = 14
@@ -66,16 +67,25 @@ def cem_update(samples, fitnesses, elite_k):
     return elite.mean(axis=0), elite.std(axis=0)
 
 
-def evaluate(env, parts, n_seeds):
-    """(landed, perfect) over game_seeds 0..n_seeds-1 — the web-parity seeds."""
+def evaluate(artifact_json, preset, n_seeds):
+    """(landed, perfect) over game_seeds 0..n_seeds-1 — the web-parity seeds.
+
+    Flies the ACTUAL artifact through Game.set_policy/step_policy — the exact
+    per-tick code path the browser uses (training/probing run at frame_skip=4,
+    but what ships decides every tick; the reported number must measure what
+    ships). ``?seed=k`` in the web game reproduces these episodes exactly.
+    """
+    g = Game(mode="classic", preset=preset)
+    g.set_policy(artifact_json)
     landed = perfect = 0
     for seed in range(n_seeds):
-        obs, _ = env.reset(options={"game_seed": seed})
-        while True:
-            obs, _r, terminated, truncated, info = env.step(act(parts, obs))
-            if terminated or truncated:
+        g.reset(seed=seed)
+        frame = json.loads(g.frame_json())
+        for _ in range(7200):
+            frame = json.loads(g.step_policy())
+            if frame["status"] != "flying":
                 break
-        kind = info.get("outcome", {}).get("kind")
+        kind = (frame["landers"][0]["outcome"] or {}).get("kind")
         landed += kind in ("perfect", "hard")
         perfect += kind == "perfect"
     return landed, perfect
@@ -145,12 +155,7 @@ def main(argv=None):
               f"probe {h['probe']:9.2f}", flush=True)
 
     print(f"checkpoint: gen {best_gen} (probe {best_probe:.2f})")
-    parts = unflatten(best_mean, args.hidden)
-    landed, perfect = evaluate(env, parts, args.eval_seeds)
-    print(f"eval: {landed}/{args.eval_seeds} landed ({perfect} perfect) on "
-          f"{args.preset} game_seeds 0..{args.eval_seeds - 1}")
-
-    w1, b1, w2, b2 = parts
+    w1, b1, w2, b2 = unflatten(best_mean, args.hidden)
     artifact = {
         "format": FORMAT,
         "sizes": [OBS_DIM, args.hidden, N_ACTIONS],
@@ -163,10 +168,17 @@ def main(argv=None):
             "probes": args.probes,
             "checkpoint": {"gen": best_gen, "probe": round(float(best_probe), 2)},
             "fitness_history": history,
-            "eval": {"seeds": f"0..{args.eval_seeds - 1}",
-                     "landed": landed, "perfect": perfect},
         },
     }
+    landed, perfect = evaluate(
+        json.dumps(artifact, allow_nan=False), args.preset, args.eval_seeds
+    )
+    print(f"eval: {landed}/{args.eval_seeds} landed ({perfect} perfect) on "
+          f"{args.preset} game_seeds 0..{args.eval_seeds - 1} "
+          f"(per-tick, the browser path)")
+    artifact["meta"]["eval"] = {"seeds": f"0..{args.eval_seeds - 1}",
+                                "landed": landed, "perfect": perfect}
+
     with open(args.out, "w") as f:
         json.dump(artifact, f, allow_nan=False)
     print(f"wrote {args.out}")
