@@ -7,9 +7,11 @@ against this file. If you must deviate, update this file in the same change.
 All constants referenced here live in `src/moonlander/config.py` (class `Config`).
 v2 changes vs v1: 2000×750 world, 5 pads, **multi-lander** (`landers[]` schema,
 solid collisions), config-relative observations, sensor models (full/radar),
-euclidean pad targeting. Difficulty presets came in 0.3.0. The current revision
-(**0.4.0**) adds terrain macro-variation (§3) and the vector stroke font +
-docs page on the web side (§8/§9).
+euclidean pad targeting. Difficulty presets came in 0.3.0. The 0.4.0 revision
+added terrain macro-variation (§3) and the vector stroke font + docs page on
+the web side (§8/§9). The current revision (**0.5.0**) adds the trained AI
+pilot: `set_policy`/`step_policy` (§2), the `policy.json` artifact + CEM
+trainer (§11), and the web AI PILOT mode + `ml.html` machinery page (§8).
 
 ## 1. Coordinate conventions
 
@@ -33,6 +35,8 @@ frame_json   = g.step(rotate, thrust)  # n_landers == 1 only (ValueError otherwi
 frame_json   = g.step_all(controls_json)  # any n; one tick for ALL landers
 frame_json   = g.step_auto()           # n_landers == 1 autopilot tick
 frame_json   = g.step_auto_all()       # autopilot flies every still-flying lander
+g.set_policy(policy_json)              # attach a trained policy (schema §11)
+frame_json   = g.step_policy()         # n_landers == 1 trained-policy tick
 frame_json   = g.frame_json()          # current frame WITHOUT stepping
 obs          = g.obs(i=0)              # list of 14 floats for lander i (§6)
 ```
@@ -54,6 +58,11 @@ obs          = g.obs(i=0)              # list of 14 floats for lander i (§6)
 - `reset(seed=k)` fully deterministic: terrain, pads, stars, all spawns. `seed=None`: entropy.
 - Autopilot (classic only, NotImplementedError in gym mode): simple stdlib proportional
   controller per lander targeting its nearest pad; no collision avoidance (drama is a feature).
+- Trained policy (classic only, NotImplementedError in gym mode; single-lander
+  only, ValueError otherwise): `set_policy(policy_json)` attaches a §11 MLP —
+  it survives `reset()` and rides the Game instance; bad payloads raise
+  ValueError. `step_policy()` without a prior `set_policy` raises RuntimeError.
+  Same no-op-after-terminal and JSON-string semantics as `step`.
 
 ## 3. Terrain JSON (returned by `reset`, fixed for the episode)
 
@@ -334,3 +343,42 @@ As v1 (cosmetics may use browser RNG/clock; never feed back into Python), plus:
   otherwise target the full-world view. Same exponential lerp (~3 s⁻¹), view
   clamped inside world bounds, frozen during ENDED.
 - Terrain reveal traces the full 2000-wide polyline in the same ~0.7 s.
+
+## 11. Trained policy (AI PILOT)
+
+The simplest learned pilot: a 14 → hidden(16) → 4 tanh MLP (~308 weights),
+argmax over logits, trained by the cross-entropy method in
+`python -m moonlander.train_cem` (numpy + gymnasium — training side only).
+Inference is pure stdlib (`moonlander/core/policy.py`, math + json only), so
+the artifact that trains is the artifact that flies in Pyodide.
+
+**Artifact** `web/assets/policy.json` (committed — deploys with the site):
+
+```json
+{
+  "format": "mlp-tanh-argmax/v1",
+  "sizes": [14, 16, 4],
+  "w1": [["... 14 floats"], "... x16"], "b1": ["... 16 floats"],
+  "w2": [["... 16 floats"], "... x4"],  "b2": ["... 4 floats"],
+  "meta": {
+    "preset": "trainee", "pop": 64, "elite": 10, "episodes": 3, "gens": 60,
+    "hidden": 16, "noise": 0.02, "seed": 0,
+    "fitness_history": [{"gen": 1, "best": 0.0, "elite_mean": 0.0, "pop_mean": 0.0}],
+    "eval": {"seeds": "0..29", "landed": 0, "perfect": 0}
+  }
+}
+```
+
+- `w1[j][i]` = weight from obs index `i` (§6 order) to hidden unit `j`;
+  `w2[k][j]` likewise. Forward pass: `h = tanh(w1·obs + b1)`,
+  `logits = w2·h + b2`, action = argmax (ties → lowest index), then the env's
+  Discrete(4) mapping: 0 noop · 1 rotate left (+1) · 2 rotate right (−1) ·
+  3 thrust.
+- Validation (ValueError): format string must match, sizes `[14, h ≥ 1, 4]`,
+  exact row/vector lengths, every entry a finite number.
+- Trainer: fitness = mean **undiscounted** return over per-generation shared
+  episode seeds (`game_seed`s — common random numbers), elite refit + a std
+  noise floor. No discount factor anywhere — structurally immune to the §7
+  γ-horizon trap. Same `--seed` → same run.
+- `web/ml.html` ("THE MACHINERY") documents the network, the algorithm, and
+  draws the learning curve from `meta.fitness_history`.

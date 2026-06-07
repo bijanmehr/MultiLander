@@ -99,6 +99,78 @@ def test_from_json_rejects_non_object():
         Policy.from_json("[1, 2, 3]")
 
 
+# ------------------------------------------------- Game.set_policy/step_policy
+
+def fly_policy(game, seed, max_steps=7200):
+    """Reset to ``seed``, step_policy until terminal; returns all frame JSONs."""
+    game.reset(seed=seed)
+    frames = [game.frame_json()]
+    for _ in range(max_steps):
+        frames.append(game.step_policy())
+        if json.loads(frames[-1])["status"] != "flying":
+            break
+    return frames
+
+
+def test_step_policy_deterministic_byte_identical_frames():
+    # Always-thrust policy: climbs out of bounds in a few seconds — a short,
+    # fully deterministic episode that exercises the thrust path.
+    pj = policy_json(b2=[0.0, 0.0, 0.0, 1.0])
+    runs = []
+    for _ in range(2):
+        g = Game(mode="classic", preset="cadet")
+        g.set_policy(pj)
+        runs.append(fly_policy(g, seed=11))
+    assert runs[0] == runs[1]  # byte-identical, every frame
+
+
+def test_step_policy_after_terminal_is_noop():
+    g = Game(mode="classic", preset="cadet")
+    g.set_policy(policy_json())  # all-noop policy: free fall -> crash
+    last = fly_policy(g, seed=3)[-1]
+    assert json.loads(last)["status"] != "flying"
+    assert g.step_policy() == last  # §2: byte-identical no-op
+
+
+def test_step_policy_without_policy_raises_runtime_error():
+    g = Game(mode="classic")
+    g.reset(seed=0)
+    with pytest.raises(RuntimeError, match="set_policy"):
+        g.step_policy()
+
+
+def test_step_policy_raises_in_gym_mode():
+    g = Game(mode="gym")
+    g.set_policy(policy_json())
+    g.reset(seed=0)
+    with pytest.raises(NotImplementedError):
+        g.step_policy()
+
+
+def test_step_policy_raises_on_multi_lander_game():
+    g = Game(mode="classic", n_landers=2)
+    g.set_policy(policy_json())
+    g.reset(seed=0)
+    with pytest.raises(ValueError, match="one lander"):
+        g.step_policy()
+
+
+def test_set_policy_rejects_garbage():
+    g = Game(mode="classic")
+    with pytest.raises(ValueError):
+        g.set_policy('{"format": "nope"}')
+
+
+def test_policy_survives_reset():
+    # §2: set once, fly many episodes (the web binge-watch path).
+    g = Game(mode="classic")
+    g.set_policy(policy_json())
+    g.reset(seed=1)
+    g.step_policy()
+    g.reset(seed=2)
+    g.step_policy()
+
+
 # -------------------------------------------------------------------- purity
 
 def test_policy_module_imports_only_math_and_json():

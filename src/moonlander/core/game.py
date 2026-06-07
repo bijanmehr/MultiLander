@@ -13,6 +13,7 @@ import random
 from ..config import Config
 from . import autopilot, physics
 from .physics import LanderState
+from .policy import Policy
 from .terrain import Terrain
 
 
@@ -45,6 +46,7 @@ class Game:
         self.mode = mode
         self.obs_mode = obs_mode
         self.n_landers = n_landers
+        self.policy = None  # trained policy (§2 set_policy); survives reset
         # CONTRACT §2: difficulty preset, an explicit config= wins over it.
         # The active preset name is bookkeeping only — never in frame JSON.
         if config is not None:
@@ -188,6 +190,38 @@ class Game:
             gravity=cfg.gravity, thrust_accel=cfg.thrust_accel,
         )
         return (rotate, thrust, 0)
+
+    def set_policy(self, policy_json):
+        """Attach a trained policy for ``step_policy`` (CONTRACT §2, schema §11).
+
+        ``policy_json`` is the JSON string written by ``moonlander.train_cem``
+        — the same artifact the browser fetches. Survives ``reset``;
+        validation problems raise ValueError.
+        """
+        self.policy = Policy.from_json(policy_json)
+
+    def step_policy(self):
+        """One tick flown by the attached trained policy (CONTRACT §2).
+
+        Classic mode only; single-lander games only; requires a prior
+        ``set_policy``. Same no-op-after-terminal and JSON-string semantics
+        as ``step``.
+        """
+        if self.mode != "classic":
+            raise NotImplementedError(
+                "step_policy is classic-mode only; the policy does not fly gym-mode engines"
+            )
+        if self.n_landers != 1:
+            raise ValueError(
+                f"step_policy() drives exactly one lander; this game has {self.n_landers}"
+            )
+        if self.policy is None:
+            raise RuntimeError(
+                "no policy attached — call set_policy(policy_json) first"
+            )
+        rotate, thrust = self.policy.act(self.obs(0))
+        self._tick([(rotate, thrust, 0)])
+        return self.frame_json()
 
     def _tick(self, controls):
         """Advance every still-flying lander one dt, then resolve collisions.
