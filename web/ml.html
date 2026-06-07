@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LUNAR LANDER — THE MACHINERY</title>
+  <!-- Machinery page (CONTRACT §8/§11): standalone — no Pyodide, no
+       frameworks, no external fonts. Loads vectorfont.js only; headings are
+       small canvases painted with the stroke font, body text is plain
+       monospace. Relative links only. The learning curve is drawn from the
+       real trained artifact (assets/policy.json) when fetch is available. -->
+  <meta name="description" content="How the LUNAR LANDER AI pilot works: a 308-parameter neural network trained with the cross-entropy method — no gradients, no discount factor, every line explained.">
+  <meta property="og:title" content="LUNAR LANDER — THE MACHINERY">
+  <meta property="og:description" content="A 308-parameter neural network learns to fly the 1979 arcade classic. No gradients, no black box — every moving part explained.">
+  <meta property="og:type" content="website">
+  <!-- Same inline SVG favicon as the game (white lander outline on black). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg stroke='%23fff' fill='none' stroke-width='1.6'%3E%3Cpath d='M11 17v-5l3-3h4l3 3v5z'/%3E%3Cpath d='M9 17h14'/%3E%3Cpath d='M11 17l-4 7m18-7l4 7'/%3E%3Cpath d='M4 24h6m12 0h6'/%3E%3C/g%3E%3C/svg%3E">
+  <style>
+    /* Same tube as docs.html: pure black, glowing strokes for display
+       lettering, plain monospace body text for readability. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+    }
+    body {
+      color: #ddd;
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 1.2rem 1.2rem 3rem;
+    }
+
+    canvas[data-h] {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 2.4rem 0 0.4rem;
+    }
+    #masthead { margin: 1.4rem 0 0.2rem; }
+
+    a {
+      color: #bbb;
+      text-decoration: none;
+      border-bottom: 1px dotted #666;
+    }
+    a:hover { color: #fff; }
+    .back {
+      display: inline-block;
+      margin: 0.8rem 0;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+    }
+
+    pre {
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      padding: 0.8rem 1rem;
+      overflow-x: auto;
+      color: #cfcfcf;
+      line-height: 1.5;
+    }
+    code { color: #fff; }
+
+    table {
+      border-collapse: collapse;
+      margin: 0.6rem 0 1rem;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 0.25rem 0.6rem;
+      text-align: left;
+    }
+    th { color: #fff; font-weight: 400; letter-spacing: 0.08em; }
+    td { color: #ccc; }
+
+    ul { padding-left: 1.4rem; }
+    li { margin: 0.15rem 0; }
+    .dim { color: #888; }
+    .num { color: #fff; }
+
+    #curve {
+      display: block;
+      width: 100%;
+      max-width: 880px;
+      height: auto;
+      background: #000;
+      margin: 0.6rem 0 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="index.html">&larr; BACK TO THE GAME</a>
+
+    <canvas id="masthead" data-h="LUNAR LANDER — THE MACHINERY" data-size="34"></canvas>
+    <p>
+      Press <code>P</code> in the game and a neural network of
+      <span class="num">308 numbers</span> flies the lander. This page explains
+      every moving part — the network, the learning algorithm, the tricks, and
+      the honest results. There is no black box here: the forward pass below is
+      the <em>actual shipped code</em>, and it is short enough to read over
+      coffee. The same pure-Python module that trained on a laptop runs live in
+      your browser through Pyodide.
+    </p>
+
+    <canvas data-h="THE LOOP"></canvas>
+    <p>
+      Sixty times a second, the same three beats as any pilot — sense, think,
+      act:
+    </p>
+    <pre><code>OBS(14 floats) ──► NETWORK ──► ARGMAX ──► {NOOP | LEFT | RIGHT | THRUST} ──► PHYSICS ──► repeat</code></pre>
+    <p>
+      Python builds a 14-number summary of the world, the network turns it
+      into one of four button presses, the physics integrates one tick. The
+      network has no memory, no planning, no lookahead — it is a pure reflex:
+      the same 14 numbers always produce the same button.
+    </p>
+
+    <canvas data-h="WHAT IT SEES"></canvas>
+    <p>
+      The 14 inputs (full formulas in <a href="docs.html">the manual</a>):
+      position, velocity, attitude (sin/cos + spin), fuel fraction, the vector
+      to the nearest pad, pad half-width and multiplier, terrain clearance,
+      and a pad-visible flag. All world-size-relative, most within ±1.
+      Press <code>O</code> in the game — also while the AI flies — and you
+      watch these exact numbers stream through its synthetic eyes.
+    </p>
+
+    <canvas data-h="THE NETWORK"></canvas>
+    <pre><code>  obs[14] ──► [ 16 tanh units ] ──► [ 4 logits ] ──► argmax ──► action
+
+  w1: 16×14 = 224      b1: 16      w2: 4×16 = 64      b2: 4
+  total: 308 numbers — the whole pilot fits in a tweet-sized JSON file</code></pre>
+    <p>
+      The forward pass, verbatim from
+      <code>src/moonlander/core/policy.py</code> (stdlib only — this exact
+      code runs in your browser):
+    </p>
+    <pre><code># argmax index -&gt; classic controls — EXACTLY env.py's Discrete(4) mapping:
+# 0 noop, 1 rotate left (+1 = CCW), 2 rotate right (-1), 3 thrust.
+ACTIONS = ((0, False), (1, False), (-1, False), (0, True))
+
+def act(self, obs):
+    """obs (14 floats) -&gt; (rotate, thrust). Ties pick the lowest index."""
+    h = [math.tanh(sum(w * x for w, x in zip(row, obs)) + b)
+         for row, b in zip(self.w1, self.b1)]
+    logits = [sum(w * v for w, v in zip(row, h)) + b
+              for row, b in zip(self.w2, self.b2)]
+    return ACTIONS[max(range(4), key=logits.__getitem__)]</code></pre>
+    <p class="dim">
+      That is the entire pilot. tanh squashes each hidden unit to (−1, 1);
+      argmax picks the strongest of four opinions; ties go to the lowest
+      index, so the flight is perfectly deterministic.
+    </p>
+
+    <canvas data-h="HOW IT LEARNS"></canvas>
+    <p>
+      The <strong>cross-entropy method</strong> (CEM), the simplest learning
+      algorithm that genuinely works here, in one breath: <em>guess 64
+      networks, fly each one, keep the 10 best, aim your next guesses at the
+      winners, repeat 60 times.</em> No gradients, no backpropagation — just a
+      bell curve over all 308 weights that slowly tightens around whatever
+      flies well. The refit step, verbatim from
+      <code>src/moonlander/train_cem.py</code>:
+    </p>
+    <pre><code>def cem_update(samples, fitnesses, elite_k):
+    """One CEM step: (mean, std) of the elite_k best samples (higher = better)."""
+    order = np.argsort(fitnesses)[::-1]
+    elite = samples[order[:elite_k]]
+    return elite.mean(axis=0), elite.std(axis=0)</code></pre>
+    <p>And the generation loop around it:</p>
+    <pre><code>for gen in range(1, args.gens + 1):
+    # Common random numbers: every candidate flies the SAME episode seeds
+    # this generation — candidates compete on skill, not terrain luck.
+    seeds = [int(s) for s in rng.integers(0, 2**31, size=args.episodes)]
+    samples = rng.normal(mean, std, size=(args.pop, n))
+    fitnesses = np.array([
+        np.mean([episode_return(env, unflatten(th, args.hidden), s)
+                 for s in seeds])
+        for th in samples
+    ])
+    mean, std = cem_update(samples, fitnesses, args.elite)
+    std += args.noise
+    probe = np.mean([episode_return(env, unflatten(mean, args.hidden), s)
+                     for s in probe_seeds])
+    if probe &gt; best_probe:
+        best_probe, best_mean, best_gen = probe, mean.copy(), gen</code></pre>
+    <ul>
+      <li><strong>Fitness</strong> is the raw episode return of the game's
+        shaped reward — progress toward a pad, a small fuel cost, a big
+        terminal bonus or penalty. Nothing else.</li>
+      <li><strong>Common random numbers:</strong> all 64 candidates fly the
+        same terrains each generation, so selection measures skill, not
+        terrain luck.</li>
+      <li><strong>Noise floor</strong> (<code>std += 0.02</code>): the bell
+        curve is never allowed to collapse — it keeps exploring forever.</li>
+      <li><strong>Checkpoint, not finish line:</strong> the wandering mean is
+        probed each generation on held-out terrains, and the artifact ships
+        the <em>best report card, not the last one</em>. (The first three
+        training runs shipped the final generation and landed 1–2/30 — the
+        dashed PROBE line below is why that was the wrong checkpoint.)</li>
+    </ul>
+
+    <canvas data-h="WHY NO GRADIENTS, WHY NO GAMMA"></canvas>
+    <p>
+      Gradient methods (REINFORCE, PPO) differentiate through the policy and
+      need a discount factor &gamma; to weigh future reward. This project's
+      pre-training audit found a beautiful trap there: at
+      <code>&gamma; = 0.99</code> a landing is ~1300+ decisions away, the
+      terminal bonus discounts to ~0.0002, and <em>hovering provably beats
+      landing</em> — a PPO agent with default settings would have converged to
+      the hover, correctly optimizing the wrong objective.
+    </p>
+    <p>
+      CEM cannot fall into that trap, <em>by construction</em>: its fitness is
+      the plain undiscounted sum of an episode's rewards. There is no
+      &gamma; anywhere in the trainer. The flip side is honest too: searching
+      308 weights by guessing scales terribly — at GPT scale this would be
+      hopeless. That is exactly why this network is tiny, and why the roadmap's
+      next phase (a PPO baseline) exists: gradients are what you graduate to
+      when guessing stops being enough.
+    </p>
+
+    <canvas data-h="THE RESULTS"></canvas>
+    <canvas id="curve" width="880" height="300"></canvas>
+    <p class="dim" id="curve-note">LOADING THE TRAINING CURVE…</p>
+    <p id="eval-line"></p>
+    <p>
+      The pilot trained on <code>TRAINEE</code> terrain. Switch difficulty in
+      the game (<code>1</code>/<code>2</code>/<code>3</code>) and watch it
+      struggle on worlds it never saw — narrower pads, rougher ridges, less
+      fuel. The imperfection is the point: this is what the <em>simplest
+      possible</em> learned pilot looks like, a baseline the fancier
+      algorithms will have to beat.
+    </p>
+
+    <canvas data-h="TRY IT"></canvas>
+    <ul>
+      <li>Open <a href="index.html">the game</a>, press <code>P</code> (or the
+        <code>AI</code> button on touch), then any key to launch — the network
+        flies.</li>
+      <li>Grab the stick any time: a fresh rotate/thrust press hands control
+        back to you.</li>
+      <li><code>O</code> shows the 14 numbers the network sees, live.</li>
+      <li><code>?seed=N</code> in the URL pins the terrain — fly it yourself,
+        then press <code>P</code> and <code>R</code> and watch the network
+        attempt the same ground.</li>
+      <li>Retrain at home: <code>python -m moonlander.train_cem --seed 0</code>
+        (minutes on a laptop; deterministic per seed).</li>
+    </ul>
+
+    <a class="back" href="index.html">&larr; BACK TO THE GAME</a>
+    &nbsp;&nbsp;<a class="back" href="docs.html">THE MANUAL &rarr;</a>
+  </main>
+
+  <script src="vectorfont.js"></script>
+  <script>
+    // Shared heading painter (same as docs.html): every <canvas data-h="...">
+    // becomes a stroke-font heading with the white beam + glow of the tube.
+    for (const c of document.querySelectorAll("canvas[data-h]")) {
+      const size = Number(c.dataset.size || 24);
+      c.width = Math.ceil(VectorFont.measure(c.dataset.h, size)) + 16;
+      c.height = Math.ceil(size * 1.6);
+      const ctx = c.getContext("2d");
+      ctx.strokeStyle = "#fff";
+      ctx.shadowColor = "#fff";
+      ctx.shadowBlur = 6;
+      VectorFont.draw(ctx, c.dataset.h, 8, size * 1.3, size);
+    }
+
+    // Learning curve, drawn from the real trained artifact's
+    // meta.fitness_history. fetch is blocked on file:// — the page stays
+    // readable and the note says how to see the curve.
+    const curve = document.getElementById("curve");
+    const note = document.getElementById("curve-note");
+    const evalLine = document.getElementById("eval-line");
+
+    function drawCurve(meta) {
+      const hist = meta.fitness_history;
+      const ctx = curve.getContext("2d");
+      const W = curve.width, H = curve.height;
+      const PAD = { l: 70, r: 16, t: 16, b: 40 };
+      const series = [
+        ["pop_mean", "#666"],
+        ["elite_mean", "#aaa"],
+        ["best", "#fff"],
+        ["probe", "#ddd"],   // held-out — the dashed line that picks the checkpoint
+      ];
+      const all = hist.flatMap((h) =>
+        series.map(([k]) => h[k]).filter((v) => v !== undefined));
+      const lo = Math.min(...all), hi = Math.max(...all);
+      const g0 = hist[0].gen, g1 = hist[hist.length - 1].gen;
+      const X = (g) => PAD.l + ((g - g0) / (g1 - g0)) * (W - PAD.l - PAD.r);
+      const Y = (v) => H - PAD.b - ((v - lo) / (hi - lo)) * (H - PAD.t - PAD.b);
+
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+      if (lo < 0 && hi > 0) {  // the zero-return line: crash-land frontier
+        ctx.beginPath();
+        ctx.moveTo(PAD.l, Y(0));
+        ctx.lineTo(W - PAD.r, Y(0));
+        ctx.stroke();
+      }
+      ctx.shadowColor = "#fff";
+      for (const [key, color] of series) {
+        if (hist[0][key] === undefined) continue; // older artifacts
+        ctx.strokeStyle = color;
+        ctx.shadowBlur = key === "best" ? 6 : 0;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash(key === "probe" ? [6, 5] : []);
+        ctx.beginPath();
+        hist.forEach((h, i) => {
+          const x = X(h.gen), y = Y(h[key]);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = "#fff";
+      VectorFont.draw(ctx, "RETURN", 8, 28, 13);
+      VectorFont.draw(ctx, "GENERATION", W / 2, H - 8, 13, { align: "center" });
+      VectorFont.draw(ctx, String(Math.round(hi)), PAD.l - 8, PAD.t + 12, 12,
+                      { align: "right" });
+      VectorFont.draw(ctx, String(Math.round(lo)), PAD.l - 8, H - PAD.b, 12,
+                      { align: "right" });
+      ctx.strokeStyle = "#fff";
+      VectorFont.draw(ctx, "BEST", W - PAD.r - 8, PAD.t + 18, 12,
+                      { align: "right" });
+      ctx.strokeStyle = "#aaa";
+      VectorFont.draw(ctx, "ELITE", W - PAD.r - 8, PAD.t + 36, 12,
+                      { align: "right" });
+      ctx.strokeStyle = "#666";
+      VectorFont.draw(ctx, "POPULATION", W - PAD.r - 8, PAD.t + 54, 12,
+                      { align: "right" });
+      if (hist[0].probe !== undefined) {
+        ctx.strokeStyle = "#ddd";
+        VectorFont.draw(ctx, "PROBE (HELD-OUT)", W - PAD.r - 8, PAD.t + 72, 12,
+                        { align: "right" });
+      }
+      if (meta.checkpoint) {  // mark the generation the artifact shipped from
+        ctx.strokeStyle = "#fff";
+        const cx = X(meta.checkpoint.gen);
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cx, PAD.t);
+        ctx.lineTo(cx, H - PAD.b);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        VectorFont.draw(ctx, "SHIPPED", Math.min(cx + 6, W - PAD.r - 70),
+                        H - PAD.b - 8, 11);
+      }
+    }
+
+    fetch("assets/policy.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) throw new Error("no artifact");
+        drawCurve(data.meta);
+        const m = data.meta;
+        const ev = m.eval;
+        note.textContent =
+          `TRAINED ${m.gens} GENERATIONS × ${m.pop} CANDIDATES × ` +
+          `${m.episodes} EPISODES ON ${String(m.preset).toUpperCase()}, ` +
+          `SEED ${m.seed}` +
+          (m.checkpoint ? ` — SHIPPED THE GEN ${m.checkpoint.gen} CHECKPOINT.`
+                        : ".");
+        evalLine.innerHTML =
+          `Final eval: <span class="num">${ev.landed}/30</span> landed ` +
+          `(<span class="num">${ev.perfect}</span> perfect) on TRAINEE ` +
+          `seeds ${ev.seeds} — the scripted autopilot lands 30/30 there. ` +
+          `The network earned its landings; the autopilot was told how.`;
+      })
+      .catch(() => {
+        note.textContent =
+          "SERVE THE SITE TO SEE THE TRAINING CURVE — " +
+          "fetch is blocked on file:// (run scripts/serve.sh).";
+      });
+  </script>
+</body>
+</html>

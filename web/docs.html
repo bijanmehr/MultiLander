@@ -111,6 +111,7 @@
         &nbsp;&middot;&nbsp; <code>&uarr;</code>/<code>W</code>/<code>Space</code> thrust
         &nbsp;&middot;&nbsp; <code>R</code> new episode
         &nbsp;&middot;&nbsp; <code>O</code> agent view
+        &nbsp;&middot;&nbsp; <code>P</code> AI pilot
         &nbsp;&middot;&nbsp; <code>1</code>/<code>2</code>/<code>3</code> difficulty</li>
       <li>Touch: arcade buttons &mdash; <code>&larr;</code>/<code>&rarr;</code>
         and <code>THRUST</code>; tap the difficulty line on the title screen
@@ -205,6 +206,15 @@ if term: print(info["outcome"])                  # {"kind": "perfect", "mult": 5
       Documented but not yet implemented: a lidar mode (terrain rays, no pad
       oracle), seeded sensor noise, and other-lander slots for the
       multi-agent env.
+    </p>
+
+    <canvas data-h="THE AI PILOT"></canvas>
+    <p>
+      Press <code>P</code> (or the <code>AI</code> button) and a trained
+      308-parameter neural network flies the lander — the same pure-Python
+      forward pass the training side used, running live in your browser.
+      Touch any flight control and it hands the stick back. How it learned,
+      line by line: <a href="ml.html">THE MACHINERY</a>.
     </p>
 
     <canvas data-h="REWARD"></canvas>
