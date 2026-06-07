@@ -276,6 +276,18 @@ inputs from before don't count) instantly disengages back to human control.
 With no policy artifact, `P`/`AI` show a transient `NO POLICY` notice (~2 s)
 instead. Attract mode always uses the scripted autopilot, never the policy.
 
+**Policy import (Bring-Your-Own-Brain, §11 format)**: a custom policy can be
+imported as the controller two ways — **drag & drop** a `.json` anywhere on the
+page, or the **`LOAD AI` footer link** (hidden file input; works on touch).
+Validation happens Python-side via `set_policy`; JS knows nothing about the
+schema. On success the import becomes the active policy (re-attached on every
+Game rebuild), AI PILOT auto-arms, the HUD indicator reads `CUSTOM AI`
+(`CUSTOM AI ARMED` on the title) and a `CUSTOM POLICY LOADED` notice shows. On
+failure a `BAD POLICY FILE` notice carries the ValueError line and the
+previously active policy stays in force (§2 guarantee). Files over 2 MB are
+rejected; imports during LOADING/ERROR are ignored. Session-only: reloading
+restores the shipped artifact.
+
 **Difficulty select**: keys `1`/`2`/`3` (TRAINEE/CADET/COMMANDER) accepted in
 TITLE and ENDED only (never mid-flight). Selection persists in
 `localStorage["moonlander.preset"]`, defaults to cadet, applies to BOTH human
@@ -399,3 +411,8 @@ the artifact that trains is the artifact that flies in Pyodide.
   γ-horizon trap. Same `--seed` → same run.
 - `web/ml.html` ("THE MACHINERY") documents the network, the algorithm, and
   draws the learning curve from `meta.fitness_history`.
+- **The schema doubles as the web import format** (§8 Bring-Your-Own-Brain):
+  any `[14, h ≥ 1, 4]` net in this JSON flies via drag & drop / `LOAD AI` —
+  `hidden` is free, `meta` is optional for imports. Example artifact:
+  `web/assets/policy-tiny.json` (hidden=4, 80 parameters, trained with
+  `--hidden 4 --seed 0`) — committed and deployed as a downloadable sample.

@@ -18,7 +18,8 @@
  *     preset:        "trainee" | "cadet" | "commander" (difficulty, §8),
  *     overlay:       boolean  (agent-view obs panel toggle),
  *     aiPilot:       boolean  (AI PILOT engaged — §8 indicator + title hint),
- *     notice:        boolean  (transient NO POLICY notice — §8),
+ *     customAi:      boolean  (the engaged policy was imported — §8 CUSTOM AI),
+ *     notice:        {title, sub}|null (transient screen notice — §8),
  *     attract:       boolean  (attract-mode episode -> title text over REVEAL),
  *     camera:        {s, cx, cy} world camera from Effects (§10),
  *     reveal:        {points, starAlpha, padsOn} partial scene or null (§10),
@@ -301,21 +302,25 @@ const Renderer = (() => {
 
   // §8 AI PILOT indicator: blinking under the left HUD block while the
   // trained policy flies — unmistakably "the machine has the stick".
-  function drawAiPilot() {
+  // An imported brain reads CUSTOM AI instead (honesty about whose pilot).
+  function drawAiPilot(custom) {
     glow(true);
     ctx.strokeStyle = "#fff";
     if (Effects.blink()) {
-      VectorFont.draw(ctx, "AI PILOT", 40, 212, 20, { align: "left" });
+      VectorFont.draw(ctx, custom ? "CUSTOM AI" : "AI PILOT", 40, 212, 20,
+                      { align: "left" });
     }
   }
 
-  // §8 transient notice: P/AI pressed but no policy.json artifact exists.
-  function drawNotice() {
+  // §8 transient notice ({title, sub}): NO POLICY, import verdicts, ...
+  function drawNotice(n) {
     glow(true);
     ctx.strokeStyle = "#fff";
-    centeredText("NO POLICY", 600, 28);
-    ctx.strokeStyle = "#999";
-    centeredText("TRAIN ONE:  PYTHON -M MOONLANDER.TRAIN_CEM", 642, 16);
+    centeredText(n.title, 600, 28);
+    if (n.sub) {
+      ctx.strokeStyle = "#999";
+      centeredText(n.sub, 642, 16);
+    }
   }
 
   // ------------------------------------------------------ agent-view overlay
@@ -433,7 +438,7 @@ const Renderer = (() => {
     ctx.strokeStyle = "#fff";
   }
 
-  function drawTitle(preset, aiPilot) {
+  function drawTitle(preset, aiPilot, customAi) {
     // Dim the attract action behind the title text.
     glow(false);
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
@@ -445,7 +450,7 @@ const Renderer = (() => {
     drawPresetMenu(preset, 450);
     if (aiPilot) {
       // §8: armed on the title — the next episode starts with the policy flying.
-      centeredText("AI PILOT ARMED", 496, 16);
+      centeredText(customAi ? "CUSTOM AI ARMED" : "AI PILOT ARMED", 496, 16);
     }
     // Cabinet-style copyright line, the way 1979 did it.
     ctx.strokeStyle = "#777";
@@ -487,12 +492,12 @@ const Renderer = (() => {
 
       case "TITLE":
         if (view.terrain && view.frame) drawScene(view);
-        drawTitle(view.preset, view.aiPilot);
+        drawTitle(view.preset, view.aiPilot, view.customAi);
         break;
 
       case "REVEAL":
         if (view.terrain && view.frame) drawScene(view);
-        if (view.attract) drawTitle(view.preset, view.aiPilot); // attract draw-in stays under the title
+        if (view.attract) drawTitle(view.preset, view.aiPilot, view.customAi); // attract draw-in stays under the title
         break;
 
       case "FLYING":
@@ -500,7 +505,7 @@ const Renderer = (() => {
         drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
-        if (view.aiPilot) drawAiPilot();
+        if (view.aiPilot) drawAiPilot(view.customAi);
         break;
 
       case "ENDED":
@@ -508,14 +513,14 @@ const Renderer = (() => {
         drawHud(view.frame, view.sessionScore, view.high, view.preset);
         if (view.seed !== null && view.seed !== undefined) drawSeed(view.seed);
         if (view.overlay) drawObsOverlay(view.frame.landers[0].obs);
-        if (view.aiPilot) drawAiPilot();
+        if (view.aiPilot) drawAiPilot(view.customAi);
         // Banner describes lander 0 (§9), ~0.8 s after a crash (§10).
         if (view.showBanner) drawOutcomeBanner(view.frame.landers[0].outcome);
         break;
     }
     if (view.notice && (view.state === "TITLE" || view.state === "FLYING" ||
                         view.state === "ENDED")) {
-      drawNotice(); // §8: NO POLICY, ~2 s
+      drawNotice(view.notice); // §8: transient notice, ~2 s
     }
   }
 

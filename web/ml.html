@@ -240,6 +240,31 @@ def act(self, obs):
       algorithms will have to beat.
     </p>
 
+    <canvas data-h="BRING YOUR OWN BRAIN"></canvas>
+    <p>
+      The game accepts <em>any</em> policy in the same JSON format — drag a
+      file onto <a href="index.html">the game</a> (or use the
+      <code>LOAD AI</code> link in its footer) and your network takes the
+      stick, labeled <code>CUSTOM AI</code>. The format is exactly what you
+      saw above: <code>{"format": "mlp-tanh-argmax/v1", "sizes": [14, H, 4],
+      "w1", "b1", "w2", "b2"}</code> — any hidden width, plain nested lists of
+      finite numbers. Bad files are rejected by the same Python validator that
+      guards the shipped artifact, and the previous pilot keeps flying.
+    </p>
+    <ul>
+      <li>Try it now: download the
+        <a href="assets/policy-tiny.json" download>TINY EXAMPLE</a> — a
+        <span class="num">hidden=4, 80-parameter</span> brain trained the same
+        way (<code>--hidden 4 --seed 0</code>; lands 2/30 with 1 perfect —
+        even 80 numbers occasionally land a rocket) — then drop it on the
+        game.</li>
+      <li>Train your own: <code>python -m moonlander.train_cem --hidden 8</code>,
+        or write any trainer you like and export the JSON —
+        <code>src/moonlander/train_cem.py</code> is the reference exporter.</li>
+      <li>Imports last for the session; reloading restores the shipped
+        pilot.</li>
+    </ul>
+
     <canvas data-h="TRY IT"></canvas>
     <ul>
       <li>Open <a href="index.html">the game</a>, press <code>P</code> (or the

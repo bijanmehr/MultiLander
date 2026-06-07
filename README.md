@@ -102,8 +102,11 @@ cross-entropy method — no gradients, no discount factor, numpy only:
 .venv/bin/python -m moonlander.train_cem      # minutes → web/assets/policy.json
 ```
 
-Press `P` in the web game to hand it the stick. Every moving part is explained
-at **[ml.html](https://bijanmehr.github.io/MultiLander/ml.html)**.
+Press `P` in the web game to hand it the stick — or **bring your own brain**:
+drag any policy JSON onto the game (`LOAD AI` in the footer works too) and your
+network flies instead. Every moving part, the import format, and a downloadable
+80-parameter example live at
+**[ml.html](https://bijanmehr.github.io/MultiLander/ml.html)**.
 
 ## Architecture (why this works in a browser)
 

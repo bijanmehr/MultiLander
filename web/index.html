@@ -231,9 +231,15 @@
     &larr;/A &rarr;/D rotate &nbsp;&middot;&nbsp; &uarr;/W/space thrust &nbsp;&middot;&nbsp; 1/2/3 difficulty &nbsp;&middot;&nbsp; R new episode &nbsp;&middot;&nbsp; O agent view &nbsp;&middot;&nbsp; P AI pilot
     &nbsp;&middot;&nbsp; <a href="docs.html">DOCS</a>
     &nbsp;&middot;&nbsp; <a href="ml.html">THE MACHINERY</a>
+    &nbsp;&middot;&nbsp; <a href="#" id="load-ai">LOAD AI</a>
     &nbsp;&middot;&nbsp; <a href="https://github.com/bijanmehr/MultiLander">GITHUB</a>
     &nbsp;&middot;&nbsp; <span style="color:#666">by <a href="https://github.com/bijanmehr">bijan mehr</a></span>
   </footer>
+
+  <!-- §8 Bring-Your-Own-Brain: hidden file input behind the LOAD AI link;
+       drag & drop anywhere works too. Wired in app.js (initImport). -->
+  <input type="file" id="policy-file" accept=".json,application/json"
+         style="display:none">
 
   <!-- Pyodide runtime (CONTRACT §8) -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>

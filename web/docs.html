@@ -216,6 +216,13 @@ if term: print(info["outcome"])                  # {"kind": "perfect", "mult": 5
       Touch any flight control and it hands the stick back. How it learned,
       line by line: <a href="ml.html">THE MACHINERY</a>.
     </p>
+    <p>
+      You can also <strong>bring your own brain</strong>: drag a policy
+      <code>.json</code> onto the game (or use the <code>LOAD AI</code> footer
+      link) and your network flies instead, labeled <code>CUSTOM AI</code>.
+      Format and a downloadable example:
+      <a href="ml.html">THE MACHINERY</a>.
+    </p>
 
     <canvas data-h="REWARD"></canvas>
     <pre><code>φ(s)  = -1.0 * dist - 0.5 * speed - 0.5 * |sin angle|

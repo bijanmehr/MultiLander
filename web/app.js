@@ -40,8 +40,9 @@
   let overlay = false;     // agent-view obs panel toggle
   let preset = loadPreset(); // §8 difficulty preset (localStorage, default cadet)
   let aiPilot = false;     // §8/§11: AI PILOT — the trained policy flies lander 0
-  let policyJson = null;   // raw §11 policy.json string fetched at boot, or null
-  let notice = 0;          // seconds left on the NO POLICY notice
+  let policyJson = null;   // raw §11 policy JSON string (shipped or imported), or null
+  let customPolicy = null; // imported policy's file name, or null (shipped policy)
+  let notice = null;       // transient screen notice {title, sub, t} or null (§8)
 
   let attract = true;      // current episode flown by step_auto_all() (§8 attract)?
   let revealNext = "TITLE"; // state once the REVEAL draw-in completes (§10)
@@ -334,14 +335,81 @@
     if (state === "TITLE") startEpisode(true);
   }
 
+  // §8: transient screen-space notice (NO POLICY, import results, ...).
+  function setNotice(title, sub) {
+    notice = { title, sub, t: NOTICE_TIME };
+  }
+
   // §8/§11: toggle the trained-policy pilot. With no policy artifact (fetch
   // failed / not trained yet) show the transient NO POLICY notice instead.
   function toggleAiPilot() {
     if (!policyJson) {
-      notice = NOTICE_TIME;
+      setNotice("NO POLICY", "TRAIN ONE:  PYTHON -M MOONLANDER.TRAIN_CEM");
       return;
     }
     aiPilot = !aiPilot;
+  }
+
+  // ---------------------------------------------------------- policy import
+
+  // §8 Bring-Your-Own-Brain: drag & drop / LOAD AI both funnel here. The
+  // schema lives in Python (§11) — JS just hands the text to set_policy and
+  // reports the verdict. On success the import becomes the active policy
+  // (ensureGame re-attaches it on every rebuild) and AI PILOT auto-arms; on
+  // failure the previously attached policy stays in force (§2 guarantee).
+  function importPolicyText(text, name) {
+    if (!py || !game) return; // still booting — quietly ignore
+    try {
+      py.globals.set("policy_json", text);
+      py.runPython("game.set_policy(policy_json)");
+    } catch (err) {
+      setNotice("BAD POLICY FILE", pyErrorLine(err));
+      return;
+    }
+    policyJson = text;
+    customPolicy = name;
+    aiPilot = true;
+    setNotice("CUSTOM POLICY LOADED", String(name).toUpperCase().slice(0, 40));
+  }
+
+  function importPolicyFile(file) {
+    if (!file) return;
+    if (file.size > 2e6) {
+      setNotice("BAD POLICY FILE", "OVER 2 MB");
+      return;
+    }
+    file.text().then((text) => importPolicyText(text, file.name));
+  }
+
+  // The useful line of a Pyodide traceback: the final "ValueError: ..." —
+  // stripped, uppercased and truncated for the stroke font.
+  function pyErrorLine(err) {
+    const lines = String((err && err.message) || err).trim().split("\n");
+    const last = lines[lines.length - 1] || "INVALID JSON";
+    return last.replace(/^\w*Error:\s*/, "").toUpperCase().slice(0, 60);
+  }
+
+  function initImport() {
+    // Drag & drop anywhere on the page (desktop): without preventDefault the
+    // browser would navigate to the dropped JSON file.
+    window.addEventListener("dragover", (e) => e.preventDefault());
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        importPolicyFile(e.dataTransfer.files[0]);
+      }
+    });
+    // LOAD AI footer link -> hidden file input (works on touch devices too).
+    const link = document.getElementById("load-ai");
+    const input = document.getElementById("policy-file");
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      input.click();
+    });
+    input.addEventListener("change", () => {
+      importPolicyFile(input.files[0]);
+      input.value = ""; // re-selecting the same file fires change again
+    });
   }
 
   // Fresh episode (human or attract): reset Python, restart the cosmetic
@@ -381,7 +449,7 @@
   // One fixed 1/60 s tick: step Python per state, then advance cosmetics.
   function tick() {
     if (state === "LOADING" || state === "ERROR") return;
-    if (notice > 0) notice -= DT; // §8: NO POLICY notice countdown
+    if (notice && (notice.t -= DT) <= 0) notice = null; // §8: notice countdown
 
     if (state === "FLYING") {
       if (aiPilot && policyJson) {
@@ -509,7 +577,8 @@
       preset,                         // §8: title menu + HUD readout
       overlay,
       aiPilot,                        // §8: AI PILOT indicator + title hint
-      notice: notice > 0,             // §8: transient NO POLICY notice
+      customAi: !!customPolicy,       // §8: imported brain -> CUSTOM AI label
+      notice: notice && { title: notice.title, sub: notice.sub }, // §8
       attract,
       camera: Effects.cameraView(),
       reveal: Effects.revealView(), // null unless the draw-in is running
@@ -563,6 +632,7 @@
   Renderer.init(document.getElementById("screen"));
   drawButtonLabels(); // §8: arcade-button labels, painted once
   initTouch();
+  initImport(); // §8: drag & drop + LOAD AI policy import
   requestAnimationFrame(loop); // render LOADING immediately
   boot();
 })();
