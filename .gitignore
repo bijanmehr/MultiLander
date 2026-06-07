@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+dist/
+
+# The browser wheel is a build artifact — CI builds it fresh on deploy,
+# locally scripts/build_web.sh does. Never commit it.
+web/assets/*.whl
+
+# OS
+.DS_Store
