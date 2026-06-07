@@ -204,6 +204,31 @@ purity, one-ulp spirit):
 - No in-browser training, no onnx/tfjs, no replay logs.
 - No JS tests (project has none; CONTRACT documents web behavior).
 
+## Addendum (approved 2026-06-07): Bring-Your-Own-Brain import + tiny example
+
+Players import a custom policy as the controller. Approved surfaces: **drag &
+drop** (a `.json` dropped anywhere on the page) and a **`LOAD AI` footer link**
+(hidden file input — works on mobile). Out of scope: `?policy=` URL, paste box,
+persistence (session-only; reload restores the shipped policy).
+
+- One import flow: file text → `game.set_policy(text)` in try/catch.
+  Validation stays in Python (§11 — JS learns nothing about the schema).
+  Success → the text becomes the active `policyJson` (rebuilds re-attach it),
+  AI PILOT auto-arms, transient notice `CUSTOM POLICY LOADED`. Failure →
+  notice `BAD POLICY FILE` + the ValueError's message line; the previous
+  policy stays active (`set_policy` assigns only after validation — pinned by
+  a new test). Guards: ignored before boot completes; files > 2 MB rejected.
+- The NO-POLICY notice machinery generalizes to dynamic `{title, sub}` text.
+- Honest indicator: HUD shows `CUSTOM AI` (vs `AI PILOT`) while a custom brain
+  flies; title shows `CUSTOM AI ARMED`.
+- **Example artifact**: `web/assets/policy-tiny.json` — an 80-parameter
+  `hidden=4` net trained with the same trainer (`--hidden 4 --seed 0`),
+  committed and deployed; ml.html's new BRING YOUR OWN BRAIN section links it
+  for download/import and documents the export format (§11) with
+  `train_cem.py` as the reference exporter.
+- CONTRACT §8 (import surfaces, CUSTOM AI, session-only) and §11 (import
+  format note + example artifact) updated in the same change.
+
 ## Build/run summary
 
 ```bash
