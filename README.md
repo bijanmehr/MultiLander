@@ -102,6 +102,16 @@ cross-entropy method — no gradients, no discount factor, numpy only:
 .venv/bin/python -m moonlander.train_cem      # minutes → web/assets/policy.json
 ```
 
+Writing your own training stack? [`examples/train_template.py`](examples/train_template.py)
+is an annotated, runnable skeleton — it tours every world function (the
+14-input observation, the Gym env, the raw `Game` core, the reward) with a
+working baseline and a `PLUG YOUR ALGORITHM HERE` section:
+
+```bash
+.venv/bin/python -m examples.train_template --tour    # see the whole API
+.venv/bin/python -m examples.train_template           # train + export a flyable policy
+```
+
 Press `P` in the web game to hand it the stick — or **bring your own brain**:
 drag any policy JSON onto the game (`LOAD AI` in the footer works too) and your
 network flies instead. Every moving part, the import format, and a downloadable
@@ -137,9 +147,10 @@ covering the controls, scoring, and the full RL interface.
 ## Project layout
 
 ```
-src/moonlander/      config.py · core/ (terrain, physics, game, autopilot) · env.py
-web/                 index.html · app.js · renderer.js · effects.js — all rendering
-tests/               determinism, physics, collisions, observations, env contract
+src/moonlander/      config.py · core/ (terrain, physics, game, autopilot, policy) · env.py · train_cem.py
+web/                 index.html · app.js · renderer.js · effects.js · ml.html — all rendering + the AI explainer
+examples/            train_template.py — annotated training-stack starting point
+tests/               determinism, physics, collisions, observations, env contract, policy
 docs/                DESIGN.md (decisions) · CONTRACT.md (the frozen Py⇄JS interface)
 scripts/             build_web.sh · serve.sh
 .github/workflows/   test + Pages deploy

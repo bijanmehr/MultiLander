@@ -261,6 +261,13 @@ def act(self, obs):
       <li>Train your own: <code>python -m moonlander.train_cem --hidden 8</code>,
         or write any trainer you like and export the JSON —
         <code>src/moonlander/train_cem.py</code> is the reference exporter.</li>
+      <li>Want a starting point for your own training stack?
+        <code>examples/train_template.py</code> is an annotated, runnable
+        skeleton: it tours every world function (the 14-input observation, the
+        Gym env, the raw <code>Game</code> core, the reward) and leaves a
+        <code>PLUG YOUR ALGORITHM HERE</code> section. Run
+        <code>python -m examples.train_template --tour</code> to see the whole
+        API in action.</li>
       <li>Imports last for the session; reloading restores the shipped
         pilot.</li>
     </ul>
