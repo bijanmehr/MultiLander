@@ -28,9 +28,9 @@ What it covers:
 - **PART 4** rollouts — turning a policy into a shaped return (training signal)
   and an honest landing rate (the metric that matters)
 - **PART 5** `>>> PLUG YOUR ALGORITHM HERE <<<` — swap the baseline for PPO /
-  REINFORCE / CMA-ES / CEM (see `src/moonlander/train_cem.py` for a
-  population-based reference) and keep everything around it
+  REINFORCE / CMA-ES / the cross-entropy method, and keep everything around it
 - **PART 6** export to `policy.json` (CONTRACT §11) the browser can fly
 
-The full machinery, the format, and a downloadable example brain live at
-[ml.html](https://bijanmehr.github.io/MultiLander/ml.html).
+Train and export a policy, then load it in the game with **LOAD AI** (or drag
+the file onto the canvas). The exported forward pass is the exact one the
+browser runs, so what you train is what you fly.

@@ -260,10 +260,10 @@ def evaluate(theta, hidden, preset="trainee", n_seeds=30):
 #     only convert to (w1,b1,w2,b2) at export time
 #   - keep `make_env` (PART 2) — set preset / frame_skip / gamma per the notes
 #
-# Drop-in ideas: REINFORCE (policy gradient on logits), CMA-ES, a full CEM
-# (see moonlander/train_cem.py for a population-based reference), or SB3 PPO
-# (env is a standard gym.Env — `PPO("MlpPolicy", make_env()).learn(...)`, then
-# read the trained weights into (w1,b1,w2,b2) for export).
+# Drop-in ideas: REINFORCE (policy gradient on the logits), a population
+# method like CMA-ES or the cross-entropy method, or SB3 PPO (the env is a
+# standard gym.Env — `PPO("MlpPolicy", make_env()).learn(...)`, then read the
+# trained weights into (w1,b1,w2,b2) for export).
 
 
 def train(hidden, iters, episodes, sigma, seed, preset):

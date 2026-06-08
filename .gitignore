@@ -11,3 +11,6 @@ web/assets/*.whl
 
 # OS
 .DS_Store
+
+# Local harness/agent state
+.claude/

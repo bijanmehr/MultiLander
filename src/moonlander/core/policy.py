@@ -3,9 +3,9 @@
 Pure stdlib — imports nothing beyond ``math`` and ``json`` (enforced by
 tests/test_policy.py). The policy is a tiny MLP: obs(14) → tanh(hidden) →
 4 logits → argmax → the same Discrete(4) classic-controls mapping the
-Gymnasium env uses. Weights come from ``python -m moonlander.train_cem``
-as a JSON string — the very artifact the browser fetches, so JS never
-sees the network, only the frames it flies.
+Gymnasium env uses. Weights are supplied as a JSON string (see ``examples/
+train_template.py`` for how to train and export one) — the same artifact
+the browser loads, so JS never sees the network, only the frames it flies.
 """
 
 import json

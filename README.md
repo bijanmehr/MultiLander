@@ -45,7 +45,7 @@ share one world** — solid, collidable, each with its own fuel, score, and fate
 | 1 | Environment, physics, web visualization | ✅ done |
 | 2 | Retro animation layer: explosions, attract mode, arcade zoom | ✅ done |
 | 3 | Multi-lander world, sensor models (partial observability), GitHub Pages | ✅ this release |
-| 4 | PPO baseline (SB3), in-browser trained-agent showcase | 🔶 CEM baseline shipped (`P` in the game) — PPO next |
+| 4 | PPO baseline (SB3), in-browser trained-agent showcase | next (training template + in-browser policy loading ready) |
 | 5 | **Algorithm arena** — train different algorithms, watch them fly side by side on identical seeds | planned |
 | 6 | **Competition** — multi-agent (PettingZoo), pad-blocking strategy, collision risk, comm channels for emergent cooperation | planned |
 | 7 | **Human + AI co-op** — you fly one lander, the agent flies the other, shared mission | the dream |
@@ -95,13 +95,6 @@ g.reset(seed=7)                                  # shared terrain, spread spawns
 g.step_all('[[1, true], [0, false], [-1, true]]')  # solid: collisions crash both
 ```
 
-The simplest learned pilot ships first: a 308-parameter MLP trained with the
-cross-entropy method — no gradients, no discount factor, numpy only:
-
-```bash
-.venv/bin/python -m moonlander.train_cem      # minutes → web/assets/policy.json
-```
-
 Writing your own training stack? [`examples/train_template.py`](examples/train_template.py)
 is an annotated, runnable skeleton — it tours every world function (the
 14-input observation, the Gym env, the raw `Game` core, the reward) with a
@@ -109,14 +102,14 @@ working baseline and a `PLUG YOUR ALGORITHM HERE` section:
 
 ```bash
 .venv/bin/python -m examples.train_template --tour    # see the whole API
-.venv/bin/python -m examples.train_template           # train + export a flyable policy
+.venv/bin/python -m examples.train_template           # train + export a policy.json
 ```
 
-Press `P` in the web game to hand it the stick — or **bring your own brain**:
-drag any policy JSON onto the game (`LOAD AI` in the footer works too) and your
-network flies instead. Every moving part, the import format, and a downloadable
-80-parameter example live at
-**[ml.html](https://bijanmehr.github.io/MultiLander/ml.html)**.
+Then **bring your own brain** to the web game: drag the exported `policy.json`
+onto the canvas (or use `LOAD AI` in the footer) and press `P` — your network
+flies, labeled `CUSTOM AI`. The forward pass you train is byte-for-byte the one
+Pyodide runs in the browser. The game ships no trained pilot of its own; the
+template is how you make one.
 
 ## Architecture (why this works in a browser)
 
@@ -147,8 +140,8 @@ covering the controls, scoring, and the full RL interface.
 ## Project layout
 
 ```
-src/moonlander/      config.py · core/ (terrain, physics, game, autopilot, policy) · env.py · train_cem.py
-web/                 index.html · app.js · renderer.js · effects.js · ml.html — all rendering + the AI explainer
+src/moonlander/      config.py · core/ (terrain, physics, game, autopilot, policy) · env.py
+web/                 index.html · app.js · renderer.js · effects.js — all rendering
 examples/            train_template.py — annotated training-stack starting point
 tests/               determinism, physics, collisions, observations, env contract, policy
 docs/                DESIGN.md (decisions) · CONTRACT.md (the frozen Py⇄JS interface)

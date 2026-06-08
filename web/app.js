@@ -344,7 +344,7 @@
   // failed / not trained yet) show the transient NO POLICY notice instead.
   function toggleAiPilot() {
     if (!policyJson) {
-      setNotice("NO POLICY", "TRAIN ONE:  PYTHON -M MOONLANDER.TRAIN_CEM");
+      setNotice("NO POLICY", "TRAIN ONE WITH EXAMPLES/TRAIN_TEMPLATE.PY, THEN LOAD AI");
       return;
     }
     aiPilot = !aiPilot;

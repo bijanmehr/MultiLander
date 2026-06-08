@@ -25,7 +25,7 @@ runs live in visitors' browsers.
 | Multi-lander (v2) | **Solid**: flying-flying contact crashes both; flying-landed crashes the flyer (pad-blocking is legal strategy) | user choice — collision-on-contact is simple (no resolution physics) and enables adversarial play |
 | Comms (future) | Message channel lives in the PettingZoo wrapper, zero core changes; pairs with radar PO (private info makes messages worth sending) | emergent-communication research needs PO to matter |
 | Training | SB3 PPO (next phase), weights exported for in-browser inference | |
-| First learned pilot (0.5.0) | CEM over a 308-param MLP; pure-stdlib forward pass in core; weights as JSON; best-probe checkpointing | simplest teachable baseline — no gradients, no γ (immune to the discount-horizon trap by construction); PPO stays phase 4 |
+| Policy interface (0.5.0) | tiny MLP forward pass in core (stdlib, `policy.py`); weights as JSON (CONTRACT §11); `examples/train_template.py` to train+export; web loads via drag-drop / LOAD AI | ship the interface, not a particular learner — anyone's trainer that emits the JSON flies in the browser; the game ships no trained brain of its own |
 
 ## Pre-training audit (2026-06-07)
 
@@ -77,8 +77,10 @@ boundary is a JSON string.
 
 4. PPO baseline (SB3, `frame_skip=4`, γ=0.999) + in-browser trained-agent showcase
    (numpy-free MLP forward pass, or replay-log playback — a full episode fits in
-   ~128 URL-safe bytes). *0.5.0 shipped the warm-up: CEM baseline + AI PILOT
-   mode (`P`) + ml.html — the numpy-free MLP path is now built and proven.*
+   ~128 URL-safe bytes). *0.5.0 shipped the interface: a stdlib MLP forward
+   pass in core, AI PILOT mode (`P`) with drag-drop / LOAD AI policy import,
+   and `examples/train_template.py` — the numpy-free MLP path is built and
+   proven; a default trained pilot is still to come.*
 5. Algorithm arena: N policies side by side on identical seeds
 6. Multi-agent (PettingZoo): competition, pad-blocking, lidar/noise sensor models,
    message channels

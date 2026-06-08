@@ -194,9 +194,9 @@ class Game:
     def set_policy(self, policy_json):
         """Attach a trained policy for ``step_policy`` (CONTRACT §2, schema §11).
 
-        ``policy_json`` is the JSON string written by ``moonlander.train_cem``
-        — the same artifact the browser fetches. Survives ``reset``;
-        validation problems raise ValueError.
+        ``policy_json`` is a §11 MLP JSON string (train and export one with
+        ``examples/train_template.py``). Survives ``reset``; validation
+        problems raise ValueError.
         """
         self.policy = Policy.from_json(policy_json)
 

@@ -9,9 +9,10 @@ v2 changes vs v1: 2000×750 world, 5 pads, **multi-lander** (`landers[]` schema,
 solid collisions), config-relative observations, sensor models (full/radar),
 euclidean pad targeting. Difficulty presets came in 0.3.0. The 0.4.0 revision
 added terrain macro-variation (§3) and the vector stroke font + docs page on
-the web side (§8/§9). The current revision (**0.5.0**) adds the trained AI
-pilot: `set_policy`/`step_policy` (§2), the `policy.json` artifact + CEM
-trainer (§11), and the web AI PILOT mode + `ml.html` machinery page (§8).
+the web side (§8/§9). The current revision (**0.5.0**) adds the AI pilot
+interface: `set_policy`/`step_policy` (§2), the bring-your-own policy format
+(§11), and the web AI PILOT mode with drag-drop / LOAD AI import (§8). No
+trained policy ships — `examples/train_template.py` is how you make one.
 
 ## 1. Coordinate conventions
 
@@ -241,16 +242,17 @@ continuous when the nearest pad switches).
 
 Files: `web/index.html`, `web/app.js`, `web/renderer.js`, `web/effects.js`,
 `web/vectorfont.js` (stroke font, §9), `web/docs.html` (documentation page),
-`web/ml.html` (machinery page, §11), trained-policy artifact at
-`web/assets/policy.json` (§11, committed), wheel at
-`web/assets/moonlander-0.5.0-py3-none-any.whl` (version matches pyproject).
+wheel at `web/assets/moonlander-0.5.0-py3-none-any.whl` (version matches
+pyproject). **No trained policy ships** — the AI pilot is bring-your-own
+(train and export one with `examples/train_template.py`, §11).
 
 **Boot** (as v1): pyodide v0.26.4 from jsdelivr, `loadPackage("micropip")`,
 `micropip.install(new URL("assets/moonlander-0.5.0-py3-none-any.whl", location.href).href)`,
-no numpy. Boot errors render on canvas. Then `fetch("assets/policy.json")` —
-optional: on failure AI PILOT is unavailable and the game is unaffected. The
-raw string is passed to `game.set_policy` on every Game (re)build, so the
-mode survives preset changes and attract↔human rebuilds.
+no numpy. Boot errors render on canvas. Then a best-effort
+`fetch("assets/policy.json")` — absent by default (404 is fine; AI PILOT just
+reports `NO POLICY` until you import one). When present, the raw string is
+passed to `game.set_policy` on every Game (re)build, so an imported policy
+survives preset changes and attract↔human rebuilds.
 
 **App states**: `LOADING` → `TITLE` (attract: `Game(n_landers=3)` flown by
 `step_auto_all()`; collisions welcome) → `REVEAL` → `FLYING` (human:
@@ -273,8 +275,9 @@ block, and the title screen shows `AI PILOT ARMED`. The mode persists across
 episodes and preset changes. **Take-over:** while the policy flies, a FRESH
 rotate/thrust press (keydown / arcade-button pointerdown — edge-triggered, held
 inputs from before don't count) instantly disengages back to human control.
-With no policy artifact, `P`/`AI` show a transient `NO POLICY` notice (~2 s)
-instead. Attract mode always uses the scripted autopilot, never the policy.
+With no policy imported, `P`/`AI` show a transient `NO POLICY` notice (~2 s)
+pointing at `examples/train_template.py`. Attract mode always uses the scripted
+autopilot, never the policy.
 
 **Policy import (Bring-Your-Own-Brain, §11 format)**: a custom policy can be
 imported as the controller two ways — **drag & drop** a `.json` anywhere on the
@@ -286,7 +289,7 @@ Game rebuild), AI PILOT auto-arms, the HUD indicator reads `CUSTOM AI`
 failure a `BAD POLICY FILE` notice carries the ValueError line and the
 previously active policy stays in force (§2 guarantee). Files over 2 MB are
 rejected; imports during LOADING/ERROR are ignored. Session-only: reloading
-restores the shipped artifact.
+clears the imported policy (the game ships none).
 
 **Difficulty select**: keys `1`/`2`/`3` (TRAINEE/CADET/COMMANDER) accepted in
 TITLE and ENDED only (never mid-flight). Selection persists in
@@ -373,28 +376,23 @@ As v1 (cosmetics may use browser RNG/clock; never feed back into Python), plus:
   clamped inside world bounds, frozen during ENDED.
 - Terrain reveal traces the full 2000-wide polyline in the same ~0.7 s.
 
-## 11. Trained policy (AI PILOT)
+## 11. Policy format (AI PILOT — bring your own)
 
-The simplest learned pilot: a 14 → hidden(16) → 4 tanh MLP (~308 weights),
-argmax over logits, trained by the cross-entropy method in
-`python -m moonlander.train_cem` (numpy + gymnasium — training side only).
-Inference is pure stdlib (`moonlander/core/policy.py`, math + json only), so
-the artifact that trains is the artifact that flies in Pyodide.
+The AI pilot is a 14 → hidden → 4 tanh MLP, argmax over logits. Inference is
+pure stdlib (`moonlander/core/policy.py`, math + json only), so the JSON you
+train against is the exact function that flies in Pyodide. The game **ships no
+trained policy**; you train and export one (`examples/train_template.py`) and
+import it via drag & drop / `LOAD AI` (§8).
 
-**Artifact** `web/assets/policy.json` (committed — deploys with the site):
+**Format** (the string `Game.set_policy` accepts and the importer loads):
 
 ```json
 {
   "format": "mlp-tanh-argmax/v1",
   "sizes": [14, 16, 4],
-  "w1": [["... 14 floats"], "... x16"], "b1": ["... 16 floats"],
-  "w2": [["... 16 floats"], "... x4"],  "b2": ["... 4 floats"],
-  "meta": {
-    "preset": "trainee", "pop": 64, "elite": 10, "episodes": 3, "gens": 60,
-    "hidden": 16, "noise": 0.02, "seed": 0,
-    "fitness_history": [{"gen": 1, "best": 0.0, "elite_mean": 0.0, "pop_mean": 0.0}],
-    "eval": {"seeds": "0..29", "landed": 0, "perfect": 0}
-  }
+  "w1": [["... 14 floats"], "... x hidden"], "b1": ["... hidden floats"],
+  "w2": [["... hidden floats"], "... x4"],   "b2": ["... 4 floats"],
+  "meta": { "...": "optional, ignored by the loader" }
 }
 ```
 
@@ -403,16 +401,8 @@ the artifact that trains is the artifact that flies in Pyodide.
   `logits = w2·h + b2`, action = argmax (ties → lowest index), then the env's
   Discrete(4) mapping: 0 noop · 1 rotate left (+1) · 2 rotate right (−1) ·
   3 thrust.
-- Validation (ValueError): format string must match, sizes `[14, h ≥ 1, 4]`,
-  exact row/vector lengths, every entry a finite number.
-- Trainer: fitness = mean **undiscounted** return over per-generation shared
-  episode seeds (`game_seed`s — common random numbers), elite refit + a std
-  noise floor. No discount factor anywhere — structurally immune to the §7
-  γ-horizon trap. Same `--seed` → same run.
-- `web/ml.html` ("THE MACHINERY") documents the network, the algorithm, and
-  draws the learning curve from `meta.fitness_history`.
-- **The schema doubles as the web import format** (§8 Bring-Your-Own-Brain):
-  any `[14, h ≥ 1, 4]` net in this JSON flies via drag & drop / `LOAD AI` —
-  `hidden` is free, `meta` is optional for imports. Example artifact:
-  `web/assets/policy-tiny.json` (hidden=4, 80 parameters, trained with
-  `--hidden 4 --seed 0`) — committed and deployed as a downloadable sample.
+- Validation (ValueError): `format` must match, `sizes` = `[14, h ≥ 1, 4]`,
+  exact row/vector lengths, every entry a finite number. `hidden` is free;
+  `meta` is optional and ignored on load.
+- `examples/train_template.py` is the reference trainer/exporter: it tours the
+  world API, trains a baseline you replace, and writes this format.

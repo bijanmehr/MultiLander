@@ -210,18 +210,19 @@ if term: print(info["outcome"])                  # {"kind": "perfect", "mult": 5
 
     <canvas data-h="THE AI PILOT"></canvas>
     <p>
-      Press <code>P</code> (or the <code>AI</code> button) and a trained
-      308-parameter neural network flies the lander — the same pure-Python
-      forward pass the training side used, running live in your browser.
-      Touch any flight control and it hands the stick back. How it learned,
-      line by line: <a href="ml.html">THE MACHINERY</a>.
+      Press <code>P</code> (or the <code>AI</code> button) to hand the lander
+      to a neural-network pilot: a small MLP whose forward pass runs in pure
+      Python, right here in your browser. Touch any flight control and it hands
+      the stick back. The game ships without a trained brain &mdash; you bring
+      your own.
     </p>
     <p>
-      You can also <strong>bring your own brain</strong>: drag a policy
-      <code>.json</code> onto the game (or use the <code>LOAD AI</code> footer
-      link) and your network flies instead, labeled <code>CUSTOM AI</code>.
-      Format and a downloadable example:
-      <a href="ml.html">THE MACHINERY</a>.
+      <strong>Bring your own brain:</strong> drag a policy <code>.json</code>
+      onto the game (or use the <code>LOAD AI</code> footer link) and your
+      network flies, labeled <code>CUSTOM AI</code>. Train and export one with
+      <code>examples/train_template.py</code> &mdash; an annotated starting
+      point that tours the whole world API; the forward pass it exports is the
+      exact one this page runs.
     </p>
 
     <canvas data-h="REWARD"></canvas>
